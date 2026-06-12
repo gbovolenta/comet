@@ -96,16 +96,15 @@ def format_masses(elements: list[str]) -> str:
     return "\n".join(lines)
 
 
-def format_masses_list(elements: list):
+def element_masses(elements: list) -> list:
     """
-    Generate the LAMMPS 'Masses' section from a list of element symbols.
+    Return per-type atomic masses [amu] for a list of element symbols.
+
+    The result is ordered to match LAMMPS atom types: ``elements[i - 1]`` is the
+    mass of type ``i``. Unlike the LAMMPS ``Masses`` section, no type index is
+    embedded — callers that write the section add the index themselves.
     """
-    lines = []
-    for i, element in enumerate(elements, start=1):
-        Z = atomic_numbers[element]
-        mass = atomic_masses[Z]
-        lines.append(f"{i} {mass:.6f}")
-    return lines
+    return [atomic_masses[atomic_numbers[element]] for element in elements]
 
 
 def write_lammpsdata(
@@ -425,8 +424,7 @@ def write_lammps_data_atomic_with_ids(
 
         f.write("Masses\n\n")
         for t, m in enumerate(masses_by_type, start=1):
-            #f.write(f"{t} {m}\n")
-            f.write(f"{m}\n")
+            f.write(f"{t} {float(m):.6f}\n")
         f.write("\n")
 
         f.write("Atoms # atomic\n\n")

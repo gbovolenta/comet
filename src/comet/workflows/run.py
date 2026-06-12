@@ -187,7 +187,7 @@ def run(config_path: str) -> int:
     from comet.io.lammps_datafile import (
         assign_ids_preserve_slab,
         build_new_velocities_from_matched_ids,
-        format_masses_list,
+        element_masses,
         parse_lammps_data,
         write_lammps_data_atomic_with_ids,
     )
@@ -470,7 +470,8 @@ def run(config_path: str) -> int:
     
     step_iter = range(1, (max_steps if run_until_converged else n_steps) + 1)
     stop_reason = "loop not entered"
-    
+    step = 0  # guard: range may be empty (steps/max_steps == 0)
+
     for step in step_iter:
     
         if not unconverged:
@@ -644,8 +645,7 @@ def run(config_path: str) -> int:
         out_path=bdir / "initial.lammpsdata",
         cell=new_struct.cell,
         elements=args["elements"],                 # ["Fe","N","H"]
-        #masses_by_type=[55.845, 14.007, 1.008],    # or build from your config
-        masses_by_type=format_masses_list(args["elements"]),
+        masses_by_type=element_masses(args["elements"]),
         new_ids=new_ids,
         new_struct=new_struct,
         new_vel=new_vel,
