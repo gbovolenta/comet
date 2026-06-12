@@ -15,11 +15,21 @@ def setup_logging() -> logging.Logger:
     Configure and return a logger that writes DEBUG-level messages to the file 'gcmc_run.log'
     and INFO-level messages to the console. All log entries exclude timestamps.
 
+    Safe to call more than once per process: handlers (and therefore the
+    'gcmc_run.log' file) are created only on the first call. This is invoked from
+    `run()` rather than at import time so merely importing the package does not
+    create a log file.
+
     Returns:
         logging.Logger: The configured logger instance.
     """
     log = logging.getLogger("gcmc")
     log.setLevel(logging.DEBUG)
+
+    # Already configured (e.g. a previous run() in this process) — don't add
+    # duplicate handlers or truncate the existing log.
+    if log.handlers:
+        return log
 
     # Formatter without timestamps
     formatter = logging.Formatter("%(levelname)s: %(message)s")
@@ -39,7 +49,9 @@ def setup_logging() -> logging.Logger:
     return log
 
 
-logger = setup_logging()
+# Module-level logger handle. Handlers (and the log file) are attached lazily by
+# setup_logging(), which run() calls — importing this module must not write files.
+logger = logging.getLogger("gcmc")
 
 
 def _prepare_paths(config: dict) -> dict:
@@ -215,6 +227,7 @@ def run(config_path: str) -> int:
         per_species_atom_counts,
     )
 
+    setup_logging()  # attach handlers / create gcmc_run.log now, not at import
     args = _prepare_paths(load_config(config_path))
     Path(args["bdir"]).mkdir(parents=True, exist_ok=True)
     energy_backend = str(args.get("energy_backend", "mace")).lower()

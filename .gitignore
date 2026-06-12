@@ -8,3 +8,7 @@ dist/
 env/
 .venv/
 .ipynb_checkpoints/
+
+# COMET run artifacts
+gcmc_run.log
+examples/output/
