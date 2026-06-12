@@ -1,0 +1,61 @@
+# Changelog
+
+All notable changes to COMET are documented here. Format loosely follows
+[Keep a Changelog](https://keepachangelog.com/).
+
+## [0.2.0] - 2026-06-12
+
+### Added
+- **Per-species pressure control via `partial_pressures`.** Each gas is driven to its
+  own partial pressure. Omitting a species (or setting it to `0`) **freezes** it: its
+  molecules stay in the box and contribute to the energy and overlap checks, but it is
+  never inserted or deleted and is still counted and logged. Works for any number of species.
+- **Configurable mole fraction `y1`** for the legacy total-pressure mode (previously
+  hard-coded to `0.75`).
+
+### Fixed
+- **`comet run examples/config.yaml` now runs.** The bundled example config was out of
+  sync with the workflow: it listed keys the code never reads — `h2_path`, `traj_path`,
+  `chemical_potential`, `mass`, `h2_energy`, `box_path` (all leftovers from the old
+  `legacy/comet.py` script) — and was missing keys the code *does* require, so the
+  documented quickstart crashed with `KeyError`. The example now matches the workflow.
+- Inserting into an **empty gas box** no longer crashes (return-arity bug in `insertion_mc`).
+- The output LAMMPS **`Masses` section** is now written correctly.
+- **Heteronuclear** species deletion now labels the deleted molecule with its template
+  name instead of re-deriving it from sorted symbols (which could mislabel, e.g. `OH`→`HO`,
+  and crash at the next step). Homonuclear runs (N₂/H₂) were unaffected.
+- `steps: 0` no longer raises at the end of a run.
+- Importing the package or running `comet --help` **no longer creates a stray
+  `gcmc_run.log`** in the working directory (logging is now set up when a run starts,
+  not at import time).
+
+### Changed
+- **MACE model is loaded once per run and cached**, instead of being rebuilt on every
+  Monte Carlo step — a large speedup for multi-step runs. No config change required.
+- `examples/config.yaml` rewritten to match the workflow: the active example is the
+  bundled Fe + H₂ system (`examples/final.lammps`), with binary N₂/H₂, legacy
+  total-pressure, and ORCA variants shown as documented, commented blocks.
+- `gcmc_run.log` and `examples/output/` are now gitignored.
+
+### Removed (internal only — no user-facing behavior change)
+- Dead duplicate `compute_chemical_potential` (singular) and the unused
+  `comet/system/matching.py` helpers.
+- ~170 lines of dead and commented-out legacy code in `workflows/run.py`, plus several
+  unused/duplicate imports.
+
+### Packaging
+- Version bumped to **0.2.0**.
+- `ase`, `numpy`, `scipy`, and `pyyaml` are now declared dependencies, so
+  `pip install -e .` into a clean environment pulls everything required.
+
+### Migration notes
+- **Configs you already run with `comet run` need no changes.** The workflow already
+  required `gas_list` / `gas_masses` / `gas_template_dir` / `restart_path` / `slab` /
+  `pressure` / `pressure_unit` (etc.) in 0.1.0 and ignored the obsolete keys above — only
+  the shipped *example* file was outdated.
+- `partial_pressures` is **opt-in**. Existing `pressure` + `pressure_unit` configs keep
+  working through the legacy fallback (1 species = pure; 2 species = binary split by `y1`).
+
+## [0.1.0]
+
+- Initial release.
