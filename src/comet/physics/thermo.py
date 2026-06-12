@@ -44,25 +44,6 @@ def lambda_wl(T: float, m_amu: float) -> float:
     return lam
 
 
-def compute_chemical_potential(T: float, m_amu: float, V: float, n: int) -> float:
-    """
-    Compute the ideal-gas chemical potential for a single species.
-
-    This preserves the legacy scalar API used by older code and tests. Newer
-    multi-species workflows can use `chemical_potentials_from_particles`.
-    """
-    if V <= 0:
-        raise ValueError("V must be > 0")
-    if n <= 0:
-        raise ValueError("n must be > 0")
-
-    lam = lambda_wl(T, m_amu)
-    density = n / V
-    mu = kB_eV * T * np.log(density * lam**3)
-    logger.debug("Computed chemical potential: %.6f eV", mu)
-    return float(mu)
-
-
 def compute_pressure_atm(T: float, V_A3: float, n: int) -> float:
     """
     Compute ideal-gas pressure from particle count.
