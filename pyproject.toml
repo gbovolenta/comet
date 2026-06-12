@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "comet"
+version = "0.1.0"
+description = "Constant pressure COntroller using METropolis algorithm workflows"
+authors = [{ name = "gbovolenta" }]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "mace-torch",
+]
+
+[project.urls]
+Homepage = "https://example.com/comet"
+
+[project.scripts]
+comet = "comet.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

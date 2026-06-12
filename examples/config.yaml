@@ -1,0 +1,17 @@
+# inputs.yaml
+bdir: examples/output/             # Output directory for all generated files
+model_dir: path/to/mace_model/     # Path to the MACE model directory (energy_forces_stage_two.model) — provide your own
+h2_path: path/to/h2.xyz            # Provide XYZ file for the H₂ gas molecule
+traj_path: path/to/traj.lammps     # Provide LAMMPS trajectory file containing initial frames
+restart_path: examples/final.lammps  # LAMMPS restart/data file containing Atoms and Velocities blocks (example provided)
+box_path: path/to/gcmc_region.txt  # File defining the GCMC insertion region bounds (provide your own)
+elements:
+  - Fe
+  - H
+z_cutoff: 15.14698231002696       # Z-coordinate cutoff (Å) for selecting H atoms into the GCMC box
+temperature: 823.0                # Simulation temperature in Kelvin
+chemical_potential: -0.9427286847788416  # Target chemical potential μ in eV
+
+mass: 2.01568                     # Mass of H₂ molecule in atomic mass units (amu)
+h2_energy: -31.74529266357422     # Reference energy of isolated H₂ in eV
+steps: 1000                       # Number of Monte Carlo steps to perform

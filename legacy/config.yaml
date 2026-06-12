@@ -1,0 +1,18 @@
+# inputs.yaml
+bdir: /work/gbovolenta/test_newgcmc/MD_cycle74/             # Output directory for all generated files
+model_dir: /work/gbovolenta/test_mace/training_0_3_9_FeH-MLP-1_E0s_avg/  # Path to the MACE model directory (energy_forces_stagetwo.model)
+h2_path: /work/gbovolenta/Fe_engine/h2.xyz          # XYZ file for the H₂ gas molecule
+traj_path: /work/gbovolenta/test_newgcmc/MD_cycle74/traj.lammps   # LAMMPS trajectory file containing initial frames
+restart_path: /work/gbovolenta/test_newgcmc/MD_cycle74/final.lammpsdata # LAMMPS restart file containing Atoms and Velocities blocks
+box_path: /work/gbovolenta/FeH-MLP-1/medium/823K/150atm_H2/GCMC/gcmc_region.txt  # File defining the GCMC insertion region bounds
+elements:
+  - Fe
+  - H
+z_cutoff: 15.14698231002696       # Z-coordinate cutoff (Å) for selecting H atoms into the GCMC box
+temperature: 823.0                # Simulation temperature in Kelvin
+chemical_potential: -0.9427286847788416  # Target chemical potential μ in eV
+
+mass: 2.01568                     # Mass of H₂ molecule in atomic mass units (amu)
+h2_energy: -31.74529266357422     # Reference energy of isolated H₂ in eV
+steps: 1000                       # Number of Monte Carlo steps to perform
+
