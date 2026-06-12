@@ -80,14 +80,18 @@ def _log_run_header(log: logging.Logger, args: dict, energy_backend: str) -> Non
     Returns:
         None
     """
+    unit = args.get("pressure_unit", "bar")
+    if args.get("partial_pressures") is not None:
+        pressure_desc = f"partial_pressures={args['partial_pressures']} {unit}"
+    else:
+        pressure_desc = f"{args.get('pressure')} {unit}"
     log.info(
-        "Run header: backend=%s, bdir=%s, temperature=%.3f K, pressure=%s %s, "
+        "Run header: backend=%s, bdir=%s, temperature=%.3f K, pressure=%s, "
         "run_until_converged=%s, steps=%s, max_steps=%s, biased_moves=%s",
         energy_backend,
         args["bdir"],
         args["temperature"],
-        args["pressure"],
-        args["pressure_unit"],
+        pressure_desc,
         bool(args.get("run_until_converged", False)),
         args.get("steps"),
         args.get("max_steps"),
@@ -208,7 +212,6 @@ def run(config_path: str) -> int:
     from comet.system.partition import (
         all_integral_diatomics,
         extract_box_gas,
-        filter_active_gas_templates,
         per_species_atom_counts,
     )
 
@@ -404,11 +407,12 @@ def run(config_path: str) -> int:
     #mu = chemical_potential_pure(T, mass1, args["pressure"], args["pressure_unit"])
 
     mu_dict = compute_chemical_potentials(
-    T,
-    gas_dict,
-    args["pressure"],
-    args["pressure_unit"],
-    0.75
+        T,
+        gas_dict,
+        pressure=args.get("pressure"),
+        pressure_unit=args.get("pressure_unit", "bar"),
+        y1=float(args.get("y1", 0.75)),
+        partial_pressures=args.get("partial_pressures"),
     )
     logger.info("Target chemical potentials: %s", _format_mu_dict(mu_dict))
 
@@ -419,9 +423,10 @@ def run(config_path: str) -> int:
             inactive,
         )
 
-    gas_templates = filter_active_gas_templates(gas_templates, mu_dict)
-    logger.debug(gas_templates)
-
+    # NOTE: gas templates are intentionally NOT filtered to active species here.
+    # Move selection already draws only from the unconverged (active) set via
+    # mu_convergence_status, so inactive species are never inserted/deleted; the
+    # frozen molecules must remain available for counting, logging and overlap.
 
     #gas_en = args["gas_energy"]
     gas_templates = load_centered_gas_templates(

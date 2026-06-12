@@ -1,17 +1,72 @@
-# inputs.yaml
-bdir: examples/output/             # Output directory for all generated files
-model_dir: path/to/mace_model/     # Path to the MACE model directory (energy_forces_stage_two.model) — provide your own
-h2_path: path/to/h2.xyz            # Provide XYZ file for the H₂ gas molecule
-traj_path: path/to/traj.lammps     # Provide LAMMPS trajectory file containing initial frames
-restart_path: examples/final.lammps  # LAMMPS restart/data file containing Atoms and Velocities blocks (example provided)
-box_path: path/to/gcmc_region.txt  # File defining the GCMC insertion region bounds (provide your own)
+# COMET example configuration
+#
+# This active example matches the bundled restart file (examples/final.lammps),
+# which is an Fe slab + H2 gas system (LAMMPS atom types: 1 = Fe, 2 = H).
+# A commented binary N2/H2 variant is shown at the bottom.
+#
+# You still need to provide your own MACE model and gas templates (see README).
+
+energy_backend: mace                 # "mace" or "orca"
+bdir: examples/output/               # Output directory for all generated files
+model_dir: path/to/mace.model        # MACE model file — provide your own
+
+restart_path: examples/final.lammps  # LAMMPS data file with Atoms (and Velocities) blocks
+
+# `elements` maps each symbol to a LAMMPS atom type by position (1-based):
+#   [Fe, H] => type 1 = Fe, type 2 = H. This MUST match the ordering in your
+#   restart file's Masses/Atoms sections.
 elements:
   - Fe
   - H
-z_cutoff: 15.14698231002696       # Z-coordinate cutoff (Å) for selecting H atoms into the GCMC box
-temperature: 823.0                # Simulation temperature in Kelvin
-chemical_potential: -0.9427286847788416  # Target chemical potential μ in eV
+slab: Fe                             # Element whose atom IDs are preserved between cycles
 
-mass: 2.01568                     # Mass of H₂ molecule in atomic mass units (amu)
-h2_energy: -31.74529266357422     # Reference energy of isolated H₂ in eV
-steps: 1000                       # Number of Monte Carlo steps to perform
+gas_list:                            # Gas species controlled/tracked (diatomic templates)
+  - H2
+gas_masses:                          # Molecular masses [amu], aligned with gas_list
+  - 2.01568
+gas_template_dir: path/to/templates/ # Directory with one <species>.xyz per gas (e.g. H2.xyz)
+
+z_cutoff: 15.14698231002696          # Z cutoff (Å): atoms above this are the GCMC gas region
+temperature: 823.0                   # Simulation temperature [K]
+
+# Preferred μ input: per-species partial pressures. Each listed species is
+# pressure-controlled toward its own partial pressure. Omit a species (or set it
+# to 0) to FREEZE it: it stays in the box and affects the energy/overlap, but is
+# never inserted or deleted and is still counted and logged.
+partial_pressures:
+  H2: 1.0
+pressure_unit: bar                   # Unit for pressures: "Pa", "bar", "atm", or "torr"
+
+steps: 1000                          # Number of Monte Carlo steps
+
+# --- Optional controls (defaults shown) ---------------------------------------
+# run_until_converged: false         # Loop until all active species hit μ tolerance (uses max_steps)
+# max_steps: 1000                    # Step cap when run_until_converged is true
+# biased_moves: false                # Bias move direction by Δμ instead of random
+# log_mu_diagnostics: false          # Emit per-species target/current μ each step
+# log_every: 1                       # Convergence-summary logging interval
+# y1: 0.75                           # Mole fraction (only used by the legacy total-pressure fallback)
+
+# --- Legacy fallback (no partial_pressures): total pressure + mole fraction ----
+# Remove `partial_pressures` above and instead provide:
+# pressure: 1.0
+# pressure_unit: bar
+# y1: 0.75                           # split for a 2-species binary mixture
+
+# --- Binary N2/H2 variant (needs an Fe/N/H restart file + N2.xyz template) -----
+# elements: [Fe, N, H]               # type order must match your LAMMPS data file
+# slab: Fe
+# gas_list:   [N2, H2]
+# gas_masses: [28.0134, 2.01568]
+# gas_template_dir: path/to/templates/   # must contain N2.xyz and H2.xyz
+# partial_pressures:
+#   N2: 0.75
+#   H2: 0.25
+# pressure_unit: bar
+
+# --- ORCA backend settings (only when energy_backend: orca) -------------------
+# orca_method: PBE
+# orca_basis: def2-SVP
+# orca_nprocs: 1
+# orca_charge: 0
+# orca_mult: 1

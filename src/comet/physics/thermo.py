@@ -216,12 +216,28 @@ def chemical_potentials_binary_mixture(
 def compute_chemical_potentials(
     T: float,
     gas_dict: dict,
-    pressure: float,
-    pressure_unit: str,
-    y1: float
+    pressure: float | None = None,
+    pressure_unit: str = "bar",
+    y1: float = 0.75,
+    partial_pressures: dict | None = None,
 ):
     """
-    Compute chemical potentials for pure or binary gas systems.
+    Compute target chemical potentials for a gas system.
+
+    Two input modes are supported:
+
+    * **Per-species partial pressures (preferred).** Pass ``partial_pressures``
+      as a ``{gas_name: partial_pressure}`` mapping. Each species' target μ is
+      computed from its own partial pressure via ``chemical_potential_pure``.
+      A species present in ``gas_dict`` but omitted from ``partial_pressures``
+      (or given a non-positive value) is treated as **inactive/frozen** and
+      assigned ``μ = -inf`` — it is never inserted/deleted but still counted
+      and logged. Works for any number of species.
+
+    * **Total pressure + mole fraction (legacy fallback).** When
+      ``partial_pressures`` is ``None``, behaves as before: a single species is
+      a pure gas at ``pressure``; two species are a binary mixture split by the
+      mole fraction ``y1``; three or more raise ``NotImplementedError``.
 
     Always returns:
         Dict[str, float]: {gas_name: mu}
@@ -229,9 +245,29 @@ def compute_chemical_potentials(
     Args:
         T: Temperature (K)
         gas_dict: {"H2": mass_H2, "N2": mass_N2, ...}
-        pressure: Total pressure
-        pressure_unit: Unit of pressure
+        pressure: Total pressure (legacy fallback mode only)
+        pressure_unit: Unit of pressure / partial pressures
+        y1: Mole fraction of species 1 (legacy binary fallback only)
+        partial_pressures: Optional {gas_name: partial_pressure} mapping
     """
+    # Preferred path: explicit per-species partial pressures.
+    if partial_pressures is not None:
+        mu_dict: dict = {}
+        for gas, m_amu in gas_dict.items():
+            p_i = partial_pressures.get(gas)
+            if p_i is None or float(p_i) <= 0.0:
+                # Omitted / non-positive partial pressure => frozen (inactive).
+                mu_dict[gas] = -np.inf
+            else:
+                mu_dict[gas] = chemical_potential_pure(T, m_amu, float(p_i), pressure_unit)
+        return mu_dict
+
+    # Legacy fallback path: total pressure split by mole fraction.
+    if pressure is None:
+        raise ValueError(
+            "compute_chemical_potentials requires either 'partial_pressures' or 'pressure'"
+        )
+
     ngas = len(gas_dict)
 
     if ngas == 1:

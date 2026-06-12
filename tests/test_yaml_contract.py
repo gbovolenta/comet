@@ -15,20 +15,25 @@ def test_yaml_loader_preserves_keys():
     config = load_config(PROJECT_ROOT / "examples" / "config.yaml")
     assert isinstance(config, dict)
 
+    # Keys the workflow actually consumes (see comet.workflows.run).
     expected_keys = {
+        "energy_backend",
         "bdir",
         "model_dir",
-        "h2_path",
-        "traj_path",
         "restart_path",
-        "box_path",
         "elements",
+        "slab",
+        "gas_list",
+        "gas_masses",
+        "gas_template_dir",
         "z_cutoff",
         "temperature",
-        "chemical_potential",
-        "mass",
-        "h2_energy",
+        "pressure_unit",
         "steps",
     }
 
     assert expected_keys.issubset(set(config.keys()))
+
+    # μ targets come from either per-species partial pressures (preferred) or
+    # the legacy total-pressure fallback.
+    assert ("partial_pressures" in config) or ("pressure" in config)

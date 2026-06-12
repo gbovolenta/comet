@@ -22,7 +22,7 @@ def insertion_mc(
     box_gas: Atoms,
     min_dist: float = 2.5,
     max_attempts: int = 50,
-) -> Tuple[Atoms, Atoms]:
+) -> Tuple[Atoms, Atoms, str]:
     """
     Attempt to insert a gas molecule into the GCMC box without overlap (PBC-aware in x,y).
 
@@ -71,8 +71,8 @@ def insertion_mc(
 
         # If box is empty, accept immediately
         if len(box_gas) == 0:
-            logger.debug("Insertion successful (empty box) on attempt %d", attempt)
-            return new, box_gas + new
+            logger.debug("Insertion successful (empty box, %s) on attempt %d", name, attempt)
+            return new, box_gas + new, name
 
         # PBC-aware overlap check: any pair closer than min_dist?
         combo = box_gas + new
