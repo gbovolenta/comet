@@ -2,11 +2,10 @@ import logging
 from pathlib import Path
 from typing import Tuple
 
+from ase.io import lammpsdata
+
 logger = logging.getLogger(__name__)
 
-from pathlib import Path
-from typing import Tuple
-from ase.io import lammpsdata
 
 def bounds_from_restart(
     restart_path: Path,

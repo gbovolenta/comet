@@ -19,7 +19,7 @@ def extract_box_gas(
     z_cutoff: float,
     gas_templates: Dict[str, Atoms],   # e.g. {"H2": Atoms(...), "N2": Atoms(...), "CO": Atoms(...)}
     bond_tol: float = 0.25,            # cutoff = bond_length * (1 + bond_tol)
-) -> Tuple[Atoms, Atoms, int, Dict[str, int], List[int], List[int], dict, int]:
+) -> Tuple[Atoms, Atoms, int, Dict[str, int], List[int], List[int], dict]:
     """
     Split system into gas box (above z_cutoff) and slab (below),
     and count diatomic molecules by gas name for all gases in gas_templates.

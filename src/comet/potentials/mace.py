@@ -10,8 +10,6 @@ from ase import Atoms
 import torch
 from mace.calculators import MACECalculator
 
-from comet.potentials.templates import load_centered_gas_templates
-
 logger = logging.getLogger(__name__)
 
 # Cache of constructed MACE calculators, keyed by (model_path, device). Building

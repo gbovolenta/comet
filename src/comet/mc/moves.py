@@ -5,13 +5,12 @@ from __future__ import annotations
 import logging
 import random
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 from ase import Atoms
 from ase.io import read
 from ase.neighborlist import neighbor_list
-from scipy.spatial import cKDTree
 
 logger = logging.getLogger(__name__)
 

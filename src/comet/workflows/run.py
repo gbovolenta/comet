@@ -270,19 +270,7 @@ def run(config_path: str) -> int:
         return 1
 
 
-    restart_dict = parse_lammps_data(args["restart_path"])
-    atoms_by_id, vels_by_id = parse_lammps_data(args["restart_path"])
     # 4. Extract gas box and surface
-    #box_gas, slab_ads, gas_count, idx_in, idx_out, xyz_dict, n_slab = extract_box_gas(
-    #    atoms, args["z_cutoff"]
-    #)
-    logger.info("Extracted Atoms and Velocities blocks from old restart file.")
-
-    elements = args["elements"]   # ["Fe", "N", "H"]
-    # Build mapping: symbol -> index (1-based)
-    elem_to_id = {sym: i + 1 for i, sym in enumerate(elements)}
-
-    # initial extract
     z_cut = float(args["z_cutoff"])
     box_gas, slab_ads, gas_count, gas_counts, idx_in, idx_out, xyz_dict = extract_box_gas(
         atoms,
@@ -344,63 +332,6 @@ def run(config_path: str) -> int:
 
     # If you want the rest of the script to use the adjusted cutoff:
     args["z_cutoff"] = z_cut
-    old_gas_pos = atoms.get_positions()[idx_in]   # shape (N_old, 3)
-    
-    
-    #    # update counts after accept
-    #symbols = box_gas.get_chemical_symbols()
-    #atom_counts = Counter(symbols)
-    #
-    ##gas_counts = {}
-    #for gas in gas_dict:
-    #    elem = gas[:-1]                  # works for homonuclear diatomics like H2/N2
-    #    n_atoms = atom_counts.get(elem, 0)
-    #    if n_atoms % 2 == 0:
-
-
-    ##if gas_count % 1 == 0:
-    #        logger.info(
-    #        "gas-molecules count is integral (%.1f) at z_cutoff = %.2f Å. No cutoff adjustment needed.",
-    #        gas_count,
-    #        args["z_cutoff"],
-    #     )
-    #    else:
-    #        logger.warning("Odd number of %s atoms in gas box: %d", elem, n_atoms)
-    #        logger.info(
-    #                "Non-integral gas-molecules count detected (%.1f) at z_cutoff = %.2f Å. "
-    #            "Incrementally adjusting cutoff.",
-    #            gas_count,
-    #            args["z_cutoff"],
-    #        )
-
-    #        z_cutoff_incr = 0.1
-
-    #        while n_atoms % 2 != 0:
-    #        #while gas_count % 1 != 0:
-    #            #box_gas, slab_ads, gas_count, idx_in, idx_out, xyz_dict, n_slab = extract_box_gas(
-    #            #    atoms, args["z_cutoff"] - z_cutoff_incr
-    #            #)
-    #            box_gas, slab_ads, gas_count, gas_counts, idx_in, idx_out, xyz_dict = extract_box_gas(
-    #            atoms,
-    #            args["z_cutoff"],
-    #            gas_templates=gas_templates
-    #            )
-
-    #            logger.info(
-    #                "Adjusted z_cutoff = %.2f Å → gas count = %.1f",
-    #                args["z_cutoff"] - z_cutoff_incr,
-    #                gas_count,
-    #            )
-
-    #            z_cutoff_incr += 0.1
-
-    #        logger.info(
-    #            "Integral gas-molecules count achieved (%.1f) at z_cutoff = %.2f Å.",
-    #            gas_count,
-    #            args["z_cutoff"] - (z_cutoff_incr - 0.1),
-    #        )
-    #logger.info(vels_by_id.get(273))
-
 
     # 5. Compute initial energy and set parameters
     try:
@@ -410,14 +341,6 @@ def run(config_path: str) -> int:
         return 1
     V = atoms.cell[0][0] * atoms.cell[1][1] * (atoms.cell[2][2] - args["z_cutoff"])
     T = args["temperature"]
-    ##mu = args["chemical_potential"]
-    #m_amu = args["mass"]
-    #m_dict = load_gas_masses(args["gas_list"], args["gas_masses"])
-    #mass1, mass2 = m_dict.values()
-    #mu = chemical_potentials_binary_mixture(T, args["pressure"], args["pressure_unit"], 1, mass1, mass2)
-
-    #mass1, mass2 = gas_dict.values()
-    #mu = chemical_potential_pure(T, mass1, args["pressure"], args["pressure_unit"])
 
     mu_dict = compute_chemical_potentials(
         T,
@@ -441,7 +364,6 @@ def run(config_path: str) -> int:
     # mu_convergence_status, so inactive species are never inserted/deleted; the
     # frozen molecules must remain available for counting, logging and overlap.
 
-    #gas_en = args["gas_energy"]
     gas_templates = load_centered_gas_templates(
     gas_template_dir=args["gas_template_dir"],
     gas_list=args["gas_list"],
@@ -464,7 +386,6 @@ def run(config_path: str) -> int:
     gas_templates_all = gas_templates  # keep immutable master dict
     
     # initial diagnostics
-    p_current = compute_pressure_atm(T, V, gas_count)
     mu_current = chemical_potentials_from_particles(T, V, gas_counts, gas_dict)
     inactive, converged, unconverged = mu_convergence_status(mu_dict, mu_current, tol)
     
@@ -662,97 +583,6 @@ def run(config_path: str) -> int:
         new_vel=new_vel,
     )
     
-    #new_N = new_struct.get_global_number_of_atoms()
-    #new_in_list_pos = []
-    #new_in_list_vel = []
-    #cell_new_in_list_pos = []
-    #cell_new_in_list_vel = []
-
-    ## identify unchanged molecules in the pressure-controlled region
-    ##logger.info(idx_in)
-    #common_pos, new_pos, new_syms = get_matching_gas_mols_with_symbols(
-    #box_gas,
-    #old_gas_pos,
-    #tol=1e-5
-    #)
-
-    ##common_gasmols, not_common_gasmols = get_matching_gas_mols(box_gas.get_positions(), idx_in)
-    ##logger.info(not_common_gasmols)
-    ##org_id_list = filter_dict(xyz_dict, common_gasmols)
-    #org_id_list = filter_dict(xyz_dict, common_pos)
-
-    #for id_num in org_id_list:
-    #    rec = restart_dict[id_num]
-    #    new_in_list_pos.append([*rec[:3], *map(str, rec[3:6])])
-    #    new_in_list_vel.append(rec[6:9])
-
-    ## assign positions to the newly added molecules
-    #for xyz in new_pos:
-    #    new_in_list_pos.extend([xyz.tolist() + ["0"] * 3])
-
-    ## assign initial velocities to the newly added molecules
-    #for sym in new_syms:
-    #    m_amu = atomic_masses[atomic_numbers[sym]]
-    #    v = boltzmann_velocity_distribution(T, m_amu)
-    #    new_in_list_vel.append([vi / 100 for vi in v])
-    #
-
-    ##for xyz in not_common_gasmols:
-    ##    new_in_list_pos.extend([xyz.tolist() + ["0"] * 3])
-    ##    new_v = [i / 100 for i in boltzmann_velocity_distribution(T, mass1 / 2)]
-    ##    new_in_list_vel.append(new_v)
-
-    #for id_num in idx_out:
-    #    rec = restart_dict[id_num]
-    #    cell_new_in_list_pos.append([*rec[:3], *map(str, rec[3:6])])
-    #    cell_new_in_list_vel.append(rec[6:9])
-
-    ## generate final list with positions and velocities
-    #cell_new_in_list_pos.extend(new_in_list_pos)
-    #cell_new_in_list_vel.extend(new_in_list_vel)
-
-    #flatten_list = reduce(operator.concat, cell_new_in_list_pos)
-    #new_coord = np.asarray(flatten_list, dtype=object).reshape(new_N, 6)
-    ##type_list = [1] * n_slab + [2] * (new_N - n_slab)
-    ##type_arr = np.asarray(type_list, dtype=int).reshape(new_N, 1)
-    #num_arr = np.asarray(range(1, new_struct.get_global_number_of_atoms()+1), dtype=int).reshape(new_struct.get_global_number_of_atoms(), 1)
-
-    ###xyz_c = new_struct.get_chemical_symbols()
-    ###pos_block = np.concatenate((xyz_c, new_coord.astype(str)), axis=1)
-    ####xyz_c = np.concatenate((num_arr.astype(str), type_arr.astype(str)), axis=1)
-
-    ### (N, 1) array of symbols
-    #sym_new_struct = np.array(new_struct.get_chemical_symbols(), dtype=str).reshape(-1, 1)
-    ##
-    ### Convert symbols to integer IDs
-    #xyz_id = np.vectorize(elem_to_id.get)(sym_new_struct)
-    #xyz_c = np.concatenate((num_arr.astype(str), xyz_id.astype(str)), axis=1)
-    ###xyz_c = np.array(new_struct.get_chemical_symbols(), dtype=str).reshape(-1, 1)  # (N,1)
-    ##new_coord = np.asarray(new_coord)                                             # (N,3)
-    ##
-    #pos_block = np.concatenate((xyz_c, new_pos), axis=1)            # (N,4)
-    ##
-    ##vel_arr = np.asarray(cell_new_in_list_vel).reshape(new_N, 3)
-    #vel_block = np.concatenate((num_arr.astype(str), new_vel), axis=1)
-
-    ##pos_string = write_string(pos)
-    ##vel_string = write_string(vel)
-    #pos_string = write_string(pos_block)
-    #vel_string = write_string(vel_block)
-
-    #lammpsdata_string = write_lammpsdata(
-    #    num_atoms=new_struct.get_global_number_of_atoms(),
-    #    positions=pos_string,
-    #    velocities=vel_string,
-    #    x_cell=new_struct.cell[0, 0],
-    #    y_cell=new_struct.cell[1, 1],
-    #    z_cell=new_struct.cell[2, 2],
-    #    elements=elements,
-    #)
-
-    #bdir = Path(args["bdir"])
-    #data_file = bdir / "initial.lammpsdata"
-    #data_file.write_text(lammpsdata_string)
     p_fin = compute_pressure_atm(T, V, gas_count)
     logger.info(
         "Finished GCMC. Final gas molecules count: %s, Final energy: %s eV", _fmt_int(gas_count), _fmt_energy(E_current)
