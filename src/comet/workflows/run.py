@@ -531,9 +531,7 @@ def run(config_path: str) -> int:
                                 sorted(converged), sorted(unconverged), sorted(inactive))
                     continue
                 try:
-                    del_mol, new_box = deletion_mc(box_gas, gas_templates_active)
-                    s = del_mol.get_chemical_symbols()
-                    move_name = "".join(sorted(s)) if s[0] != s[1] else f"{s[0]}2"
+                    del_mol, new_box, move_name = deletion_mc(box_gas, gas_templates_active)
                 except RuntimeError:
                     # fallback to insertion (same active templates)
                     logger.info("Step %d deletion proposal failed; falling back to insertion.", step)

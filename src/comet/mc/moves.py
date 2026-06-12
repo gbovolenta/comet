@@ -142,7 +142,7 @@ def deletion_mc(
     gas_templates: Dict[str, Atoms],
     bond_tol: float = 0.25,
     prefer_closest: bool = True,
-) -> Tuple[Atoms, Atoms]:
+) -> Tuple[Atoms, Atoms, str]:
     """
     Delete a single diatomic molecule from box_gas, supporting homo- and heteronuclear diatomics.
     PBC-aware via ASE neighbor_list (minimum-image distances).
@@ -150,12 +150,14 @@ def deletion_mc(
     Args:
         box_gas: Current gas box (mixture of diatomic molecules).
         gas_templates: Dict mapping molecule label -> 2-atom ASE Atoms template.
-                       Labels are informational; element identity is taken from the template itself.
+                       The label identifies the species; element identity is taken
+                       from the template itself.
         bond_tol: Fractional tolerance added to template bond length to define cutoff.
         prefer_closest: If True, delete the closest valid diatomic pair; otherwise deletes first found.
 
     Returns:
-        (gas_mol, updated_box_gas)
+        (gas_mol, updated_box_gas, name) where ``name`` is the template label of
+        the deleted species (so callers need not re-derive it from symbols).
 
     Raises:
         RuntimeError if no deletable molecule is found.
@@ -165,15 +167,19 @@ def deletion_mc(
 
     symbols = np.array(box_gas.get_chemical_symbols())
 
-    # Build cutoff map for allowed element pairs from templates
+    # Build cutoff map for allowed element pairs from templates, and remember
+    # which template label each element pair corresponds to.
     cutoff_by_pair: Dict[Pair, float] = {}
+    name_by_pair: Dict[Pair, str] = {}
     for name, templ in gas_templates.items():
         syms = templ.get_chemical_symbols()
         if len(syms) != 2:
             raise ValueError(f"Template '{name}' must contain exactly 2 atoms.")
         a, b = syms[0], syms[1]
         bond = _bond_length_from_template(templ)
-        cutoff_by_pair[_pair_key(a, b)] = bond * (1.0 + float(bond_tol))
+        key = _pair_key(a, b)
+        cutoff_by_pair[key] = bond * (1.0 + float(bond_tol))
+        name_by_pair[key] = name
 
     if not cutoff_by_pair:
         raise ValueError("No gas templates provided.")
@@ -220,11 +226,12 @@ def deletion_mc(
     # Remove atoms i and j from the box
     keep = [k not in (i, j) for k in range(len(box_gas))]
 
+    name = name_by_pair[key]
     logger.debug(
-        "Deleted diatomic %s-%s indices (%d, %d) at MIC distance %.3f Å (cutoff %.3f Å)",
-        symbols[i], symbols[j], i, j, dist, cutoff_by_pair[key]
+        "Deleted diatomic %s (%s-%s) indices (%d, %d) at MIC distance %.3f Å (cutoff %.3f Å)",
+        name, symbols[i], symbols[j], i, j, dist, cutoff_by_pair[key]
     )
-    return gas_mol, box_gas[keep]
+    return gas_mol, box_gas[keep], name
 
 
 def choose_unbiased_move(
