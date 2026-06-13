@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "comet"
-version = "0.2.0"
+version = "0.3.0"
 description = "Constant pressure COntroller using METropolis algorithm workflows"
 authors = [{ name = "gbovolenta" }]
 readme = "README.md"
@@ -15,6 +15,7 @@ dependencies = [
     "numpy",
     "scipy",
     "pyyaml",
+    "pydantic>=2",
 ]
 
 [project.urls]

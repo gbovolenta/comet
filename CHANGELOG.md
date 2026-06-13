@@ -3,6 +3,33 @@
 All notable changes to COMET are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.0] - 2026-06-12
+
+Internal architecture refactor — no change to run behavior or results. Verified
+by reproducing the 0.2.0 ORCA reference run's deterministic setup numbers
+(μ targets, species counts, μ_current) exactly.
+
+### Changed
+- **`run()` is now thin orchestration.** The ~400-line monolith was split into
+  testable stages in `comet/workflows/stages.py` — `build_initial_system`,
+  `run_mc_loop`, `write_restart` — that pass state via a `GcmcState` object.
+- **Config is validated up front.** A typed `RunConfig` (pydantic) in
+  `comet/config/schema.py` checks the configuration at load time: unknown/mistyped
+  keys are rejected, `gas_masses`/`gas_list` lengths must match, `slab` must be an
+  element, a pressure source is required, etc. `slab` accepts either `Fe` or `[Fe]`.
+  `load_config` remains a raw `yaml.safe_load` loader; `load_run_config` returns
+  the validated model.
+- **The energy backend is injectable.** `build_energy_backend` (in
+  `comet/potentials/backends.py`) returns an `EnergyBackend` the stages consume,
+  so the full pipeline can be driven by a stub in tests (new `test_workflow_e2e.py`)
+  without MACE or ORCA.
+
+### Packaging
+- Version bumped to **0.3.0**; `pydantic>=2` added as a dependency.
+- **Runtime note:** because the workflow now imports pydantic, Slurm jobs must use
+  an environment that provides it (e.g. a personal `conda-sync`'d env), not the
+  shared `conda/ase/3.27` module.
+
 ## [0.2.0] - 2026-06-12
 
 ### Added
