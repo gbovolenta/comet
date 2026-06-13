@@ -123,7 +123,11 @@ steps: 1
 
 def test_run_orchestration_with_stub_backend(tmp_path, monkeypatch):
     """`run()` wires the pipeline together; inject a stub backend and exercise it."""
-    import comet.workflows.run as run_mod
+    import importlib
+
+    # `comet.workflows.run` resolves to the re-exported function, so fetch the
+    # actual module object to monkeypatch its build_energy_backend reference.
+    run_mod = importlib.import_module("comet.workflows.run")
 
     config_path = _write_fixture(tmp_path)
     # Replace the real backend factory so run() drives the stub end-to-end.

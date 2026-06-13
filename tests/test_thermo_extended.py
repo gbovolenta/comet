@@ -99,6 +99,29 @@ def test_binary_mixture_dispatch_matches_direct_call():
     assert mu_dispatch["N2"] == pytest.approx(mu2)
 
 
+def test_compute_chemical_potentials_partial_pressures_per_species():
+    mu = compute_chemical_potentials(
+        T=300.0,
+        gas_dict={"H2": 2.0, "N2": 28.0},
+        partial_pressures={"H2": 0.5, "N2": 1.5},
+        pressure_unit="bar",
+    )
+    assert mu["H2"] == pytest.approx(chemical_potential_pure(300.0, 2.0, 0.5, "bar"))
+    assert mu["N2"] == pytest.approx(chemical_potential_pure(300.0, 28.0, 1.5, "bar"))
+
+
+def test_compute_chemical_potentials_freeze_by_omission():
+    # A species omitted from partial_pressures is frozen (mu_target = -inf).
+    mu = compute_chemical_potentials(
+        T=300.0,
+        gas_dict={"H2": 2.0, "N2": 28.0},
+        partial_pressures={"H2": 0.5},
+        pressure_unit="bar",
+    )
+    assert np.isfinite(mu["H2"])
+    assert mu["N2"] == -np.inf
+
+
 def test_compute_chemical_potentials_rejects_more_than_two_species():
     with pytest.raises(NotImplementedError):
         compute_chemical_potentials(
