@@ -4,19 +4,21 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "comet"
-version = "0.3.0"
+version = "0.3.1"
 description = "Constant pressure COntroller using METropolis algorithm workflows"
 authors = [{ name = "gbovolenta" }]
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "mace-torch",
     "ase",
     "numpy",
     "scipy",
     "pyyaml",
     "pydantic>=2",
 ]
+
+[project.optional-dependencies]
+mace = ["mace-torch"]
 
 [project.urls]
 Homepage = "https://example.com/comet"

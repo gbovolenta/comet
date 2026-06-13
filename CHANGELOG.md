@@ -3,6 +3,26 @@
 All notable changes to COMET are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.1] - 2026-06-12
+
+### Fixed
+- **MC loop no longer hides bugs.** A failed Monte Carlo step now logs the full
+  traceback (via `logger.exception`) instead of a one-line message, so genuine
+  errors are visible rather than disguised as "a step failed." The loop still stops
+  gracefully so the restart for the last good state is written.
+
+### Added
+- **`seed` config option** for fully reproducible runs (seeds both the `random`
+  and NumPy RNGs used by the MC moves and velocity assignment).
+
+### Changed
+- **Physical constants are sourced from `scipy.constants` (CODATA)** instead of
+  hand-typed literals; duplicated constants in `velocities.py`/`thermo.py` now
+  import from `physics/constants.py`. (Fixes a dead, incorrect `hbar`.)
+- **`mace-torch` is now an optional dependency.** `pip install comet` is lean
+  (ORCA backend); `pip install comet[mace]` adds the MACE backend. Selecting the
+  mace backend without it gives a clear install hint.
+
 ## [0.3.0] - 2026-06-12
 
 Internal architecture refactor — no change to run behavior or results. Verified

@@ -53,6 +53,7 @@ class RunConfig(BaseModel):
 
     # --- Monte Carlo controls ---
     steps: int
+    seed: Optional[int] = None                # RNG seed for reproducible runs
     run_until_converged: bool = False
     max_steps: Optional[int] = None           # defaults to `steps` if unset
     biased_moves: bool = False

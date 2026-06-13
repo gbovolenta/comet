@@ -8,7 +8,10 @@ the actual work lives in :mod:`comet.workflows.stages` and the energy backend in
 
 from __future__ import annotations
 
+import random
 from pathlib import Path
+
+import numpy as np
 
 from comet.config.schema import RunConfig, load_run_config
 from comet.potentials.backends import build_energy_backend
@@ -60,6 +63,12 @@ def run(config_path: str) -> int:
     """
     setup_logging()  # attach handlers / create gcmc_run.log now, not at import
     config = load_run_config(config_path)
+    if config.seed is not None:
+        # Seed both RNGs the workflow uses: `random` (MC moves) and numpy
+        # (Maxwell-Boltzmann velocities) — makes a run fully reproducible.
+        random.seed(config.seed)
+        np.random.seed(config.seed)
+        logger.info("Seeded RNGs with seed=%s", config.seed)
     Path(config.bdir).mkdir(parents=True, exist_ok=True)
     _log_run_header(config)
 

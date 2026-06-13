@@ -150,3 +150,41 @@ def test_build_energy_backend_orca_constructs(tmp_path):
     assert backend.name == "orca"
     assert callable(backend.energy)
     assert callable(backend.gas_energies)
+
+
+def test_run_is_reproducible_with_seed(tmp_path, monkeypatch):
+    """Two runs with the same seed produce an identical restart file."""
+    import importlib
+
+    run_mod = importlib.import_module("comet.workflows.run")
+    monkeypatch.setattr(run_mod, "build_energy_backend", lambda config: _stub_backend())
+
+    def _run_once(subdir: str) -> str:
+        d = tmp_path / subdir
+        templates = d / "templates"
+        templates.mkdir(parents=True)
+        (templates / "H2.xyz").write_text("2\nH2\nH 0.0 0.0 0.0\nH 0.0 0.0 0.74\n")
+        cfg = d / "config.yaml"
+        cfg.write_text(
+            f"""
+bdir: {d / 'out'}
+energy_backend: orca
+restart_path: {EXAMPLE_RESTART}
+elements: [Fe, H]
+slab: [Fe]
+gas_list: [H2]
+gas_template_dir: {templates}
+z_cutoff: 15.14698231002696
+temperature: 823.0
+pressure: 1.0
+pressure_unit: bar
+gas_masses: [2.01568]
+steps: 5
+seed: 123
+"""
+        )
+        monkeypatch.chdir(d)
+        assert run_mod.run(str(cfg)) == 0
+        return (d / "out" / "initial.lammpsdata").read_text()
+
+    assert _run_once("run_a") == _run_once("run_b")

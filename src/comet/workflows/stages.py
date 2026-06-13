@@ -378,8 +378,11 @@ def run_mc_loop(state: GcmcState, config: RunConfig, backend: EnergyBackend) -> 
 
             write_extxyz_sequence(output_extxyz, box_gas)
 
-        except Exception as e:
-            logger.error("MC step %d failed: %s", step, e)
+        except Exception:
+            # Log the full traceback (not just the message) so genuine bugs are
+            # visible rather than disguised as "a step failed", then stop
+            # gracefully so write_restart still persists the last good state.
+            logger.exception("MC step %d failed; stopping loop", step)
             stop_reason = f"exception during step {step}"
             break
 

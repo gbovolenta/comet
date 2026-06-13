@@ -35,7 +35,13 @@ class EnergyBackend:
 def build_energy_backend(config: RunConfig) -> EnergyBackend:
     """Construct the energy backend selected by ``config.energy_backend``."""
     if config.energy_backend == "mace":
-        from comet.potentials.mace import compute_gas_energies, get_energy_mace
+        try:
+            from comet.potentials.mace import compute_gas_energies, get_energy_mace
+        except ImportError as e:  # mace-torch is an optional dependency
+            raise ImportError(
+                "The 'mace' energy backend requires mace-torch. "
+                "Install it with: pip install comet[mace]"
+            ) from e
 
         model_dir = config.model_dir
         return EnergyBackend(
