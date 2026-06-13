@@ -1,14 +1,26 @@
-from ase.units import eV
-from scipy.constants import hbar as hbar_SI
+"""Physical constants and unit conversions, sourced from scipy.constants (CODATA).
 
-hbar = hbar_SI / eV  # convert J·s → eV·s
-amu_to_kg = 1.66053906660e-27  # Conversion factor for amu to kg
-h_eV_s = 4.135667696e-15    # Planck constant in eV·s
-kB_eV = 8.617333262145e-5  # Boltzmann constant in eV/K
-eV_to_J = 1.602176634e-19         # J/eV
-kB_J = kB_eV * eV_to_J            # J/K
-h_J_s = 6.62607015e-34            # J*s
-angstrom_to_m = 1e-10             # m
+Sourcing from :mod:`scipy.constants` rather than hand-typing values removes
+transcription risk and keeps everything on one CODATA release. The base SI
+constants below are exact by definition (2019 SI redefinition); ``m_u`` is the
+CODATA atomic-mass constant.
+"""
+
+from scipy import constants as _sc
+
+# --- base SI constants ---
+eV_to_J = _sc.eV            # J per eV
+kB_J = _sc.k               # Boltzmann constant [J/K]
+h_J_s = _sc.h              # Planck constant [J*s]
+amu_to_kg = _sc.m_u        # atomic mass constant [kg]
+angstrom_to_m = _sc.angstrom  # [m]
+atm_to_Pa = _sc.atm        # standard atmosphere [Pa] (= 101325)
+
+# --- eV-based forms ---
+h_eV_s = h_J_s / eV_to_J   # Planck constant [eV*s]
+kB_eV = kB_J / eV_to_J     # Boltzmann constant [eV/K]
+hbar_eV = _sc.hbar / eV_to_J  # reduced Planck constant [eV*s]
+
+# --- derived unit conversion ---
+# 1 Pa = 1 J/m^3 -> eV/Angstrom^3  (J->eV: /eV_to_J;  m^3->Angstrom^3: *1e-30)
 Pa_to_eV_per_A3 = 1e-30 / eV_to_J
-
-

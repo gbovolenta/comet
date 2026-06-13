@@ -3,7 +3,14 @@ from typing import Dict, Set, Tuple
 
 import numpy as np
 
-from comet.physics.constants import amu_to_kg, h_eV_s, kB_eV, Pa_to_eV_per_A3
+from comet.physics.constants import (
+    amu_to_kg,
+    atm_to_Pa,
+    h_eV_s,
+    kB_J,
+    kB_eV,
+    Pa_to_eV_per_A3,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +27,7 @@ def pressure_to_eV_per_A3(P: float, unit: str = "Pa") -> float:
     if u == "bar":
         return (P * 1e5) * Pa_to_eV_per_A3
     if u == "atm":
-        return (P * 101325.0) * Pa_to_eV_per_A3
+        return (P * atm_to_Pa) * Pa_to_eV_per_A3
     if u == "torr":
         return (P * 133.322368) * Pa_to_eV_per_A3
     raise ValueError(f"Unsupported pressure unit: {unit!r}")
@@ -63,10 +70,9 @@ def compute_pressure_atm(T: float, V_A3: float, n: int) -> float:
     if n < 0:
         raise ValueError("n must be >= 0")
 
-    kB_J_per_K = 1.380649e-23          # J/K
     V_m3 = V_A3 * 1e-30                # 1 Å^3 = 1e-30 m^3
-    P_Pa = (n * kB_J_per_K * T) / V_m3
-    P_atm = P_Pa / 101325.0
+    P_Pa = (n * kB_J * T) / V_m3
+    P_atm = P_Pa / atm_to_Pa
     logger.debug("Computed pressure: %.6f atm", P_atm)
     return P_atm
 
