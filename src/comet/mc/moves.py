@@ -11,8 +11,25 @@ import numpy as np
 from ase import Atoms
 from ase.io import read
 from ase.neighborlist import neighbor_list
+from scipy.spatial.transform import Rotation
 
 logger = logging.getLogger(__name__)
+
+
+def _random_rotation_matrix() -> np.ndarray:
+    """Rotation matrix drawn uniformly from SO(3) (Haar measure).
+
+    A quaternion with i.i.d. normal components, normalized to the unit
+    3-sphere, gives a uniformly distributed rotation. Sequential uniform
+    Euler angles do NOT (orientations cluster near the poles), and the GCMC
+    acceptance rule assumes trial orientations are proposed uniformly.
+
+    Draws from the global numpy RNG so the `seed` config option keeps runs
+    reproducible.
+    """
+    q = np.random.normal(size=4)
+    q /= np.linalg.norm(q)
+    return Rotation.from_quat(q).as_matrix()
 
 
 def insertion_mc(
@@ -63,10 +80,9 @@ def insertion_mc(
             random.uniform(z0, z1),
         ])
 
-        new = Atoms(symbols, coords + offset, cell=box_gas.cell, pbc=[True, True, False])
-        new.rotate(random.uniform(0, 360), 'x', center='COM')
-        new.rotate(random.uniform(0, 360), 'y', center='COM')
-        new.rotate(random.uniform(0, 360), 'z', center='COM')
+        # Rotate the COM-centered template uniformly, then place the COM.
+        rotated = coords @ _random_rotation_matrix().T
+        new = Atoms(symbols, rotated + offset, cell=box_gas.cell, pbc=[True, True, False])
 
         # If box is empty, accept immediately
         if len(box_gas) == 0:
@@ -140,11 +156,15 @@ def deletion_mc(
     box_gas: Atoms,
     gas_templates: Dict[str, Atoms],
     bond_tol: float = 0.25,
-    prefer_closest: bool = True,
 ) -> Tuple[Atoms, Atoms, str]:
     """
     Delete a single diatomic molecule from box_gas, supporting homo- and heteronuclear diatomics.
     PBC-aware via ASE neighbor_list (minimum-image distances).
+
+    The molecule to delete is chosen UNIFORMLY at random among all valid
+    diatomics found. Uniform choice is required for detailed balance: the
+    deletion acceptance prefactor n/V assumes the deleted molecule was
+    selected with probability 1/n.
 
     Args:
         box_gas: Current gas box (mixture of diatomic molecules).
@@ -152,7 +172,6 @@ def deletion_mc(
                        The label identifies the species; element identity is taken
                        from the template itself.
         bond_tol: Fractional tolerance added to template bond length to define cutoff.
-        prefer_closest: If True, delete the closest valid diatomic pair; otherwise deletes first found.
 
     Returns:
         (gas_mol, updated_box_gas, name) where ``name`` is the template label of
@@ -194,21 +213,25 @@ def deletion_mc(
     j_idx = j_idx[mask]
     d_ij = d_ij[mask]
 
-    best = None  # (dist, i, j, pair_key)
-    for i, j, d in zip(i_idx, j_idx, d_ij):
-        si, sj = symbols[i], symbols[j]
-        key = _pair_key(si, sj)
-        cut = cutoff_by_pair.get(key)
-        if cut is None:
+    # Identify whole molecules by greedy shortest-first disjoint matching
+    # (each atom belongs to at most one diatomic; same scheme as
+    # extract_box_gas), then pick one uniformly at random.
+    order = np.argsort(d_ij)
+    used = np.zeros(len(box_gas), dtype=bool)
+    molecules = []  # (dist, i, j, pair_key)
+    for k in order:
+        i, j = int(i_idx[k]), int(j_idx[k])
+        if used[i] or used[j]:
             continue
-        if d <= cut:
-            if not prefer_closest:
-                best = (float(d), int(i), int(j), key)
-                break
-            if best is None or d < best[0]:
-                best = (float(d), int(i), int(j), key)
+        key = _pair_key(symbols[i], symbols[j])
+        cut = cutoff_by_pair.get(key)
+        if cut is None or float(d_ij[k]) > cut:
+            continue
+        molecules.append((float(d_ij[k]), i, j, key))
+        used[i] = True
+        used[j] = True
 
-    if best is None:
+    if not molecules:
         logger.warning(
             "No valid diatomic molecule found for deletion using templates %s (r_max=%.3f Å)",
             list(gas_templates.keys()),
@@ -216,7 +239,7 @@ def deletion_mc(
         )
         raise RuntimeError("Deletion failed")
 
-    dist, i, j, key = best
+    dist, i, j, key = random.choice(molecules)
     pos = box_gas.get_positions()
 
     # Preserve the actual element order as it appears in the box
