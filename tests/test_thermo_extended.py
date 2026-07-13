@@ -13,7 +13,6 @@ from comet.physics.thermo import (
     chemical_potentials_from_particles,
     compute_chemical_potentials,
     compute_pressure_atm,
-    filter_gas_templates_by_species,
     load_gas_masses,
     mu_convergence_status,
     mu_converged,
@@ -165,9 +164,3 @@ def test_mu_convergence_status_validates_inputs():
         mu_convergence_status({"H2": 1.0}, {}, 0.1)
 
 
-def test_filter_gas_templates_by_species_filters_only_requested_keys():
-    templates = {"H2": "h2-template", "N2": "n2-template", "CO2": "co2-template"}
-
-    filtered = filter_gas_templates_by_species(templates, {"H2", "CO2"})
-
-    assert filtered == {"H2": "h2-template", "CO2": "co2-template"}

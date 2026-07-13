@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import random
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 from ase import Atoms
@@ -36,16 +36,23 @@ def insertion_mc(
     gas_templates: Dict[str, Atoms],
     bounds: Tuple[float, float, float, float, float, float],
     box_gas: Atoms,
+    mol_id: int,
     min_dist: float = 2.5,
     max_attempts: int = 50,
 ) -> Tuple[Atoms, Atoms, str]:
     """
     Attempt to insert a gas molecule into the GCMC box without overlap (PBC-aware in x,y).
 
+    The template may contain any number of atoms; it is inserted rigid, with a
+    uniformly random orientation about its center of mass. All atoms of the new
+    molecule are tagged with ``mol_id`` so it can later be deleted (or counted)
+    as a unit without re-deriving connectivity.
+
     Args:
-        gas_templates: Dict of templates, e.g. {"H2": Atoms(...), "N2": Atoms(...)} (each should be diatomic).
+        gas_templates: Dict of templates, e.g. {"H2": Atoms(...), "CH3OH": Atoms(...)}.
         bounds: Region bounds as (x0, x1, y0, y1, z0, z1).
-        box_gas: Current gas box.
+        box_gas: Current gas box (atoms tagged with molecule ids).
+        mol_id: Molecule id stamped on the inserted atoms (caller-owned counter).
         min_dist: Minimum allowed distance in Å (MIC in x/y).
         max_attempts: Maximum insertion attempts.
 
@@ -83,6 +90,7 @@ def insertion_mc(
         # Rotate the COM-centered template uniformly, then place the COM.
         rotated = coords @ _random_rotation_matrix().T
         new = Atoms(symbols, rotated + offset, cell=box_gas.cell, pbc=[True, True, False])
+        new.set_tags(mol_id)
 
         # If box is empty, accept immediately
         if len(box_gas) == 0:
@@ -108,14 +116,14 @@ def insertion_mc(
 
 def load_gas_templates(gas_list, template_dir):
     """
-    Load diatomic gas templates from files named H2.xyz, N2.xyz, etc.
+    Load gas templates from files named H2.xyz, CH3OH.xyz, etc.
 
     Args:
         gas_list: Iterable of gas-species labels to load.
         template_dir: Directory containing one `.xyz` file per species.
 
     Returns:
-        dict: Mapping from gas label to centered two-atom ASE template.
+        dict: Mapping from gas label to a COM-centered ASE template.
     """
     template_dir = Path(template_dir)
     gas_templates = {}
@@ -126,8 +134,8 @@ def load_gas_templates(gas_list, template_dir):
             raise FileNotFoundError(path)
 
         templ = read(path)
-        if len(templ) != 2:
-            raise ValueError(f"Template {path} must contain exactly 2 atoms")
+        if len(templ) < 1:
+            raise ValueError(f"Template {path} contains no atoms")
 
         # Ensure centered (important!)
         templ.positions -= templ.get_center_of_mass()
@@ -136,124 +144,51 @@ def load_gas_templates(gas_list, template_dir):
     return gas_templates
 
 
-Pair = Tuple[str, str]
-
-
-def _bond_length_from_template(template: Atoms) -> float:
-    """Return the bond length of a two-atom gas template."""
-    if len(template) != 2:
-        raise ValueError("Each gas template must contain exactly 2 atoms (a diatomic).")
-    p = template.get_positions()
-    return float(np.linalg.norm(p[0] - p[1]))
-
-
-def _pair_key(a: str, b: str) -> Pair:
-    """Canonical (order-independent) key for an element pair."""
-    return (a, b) if a <= b else (b, a)
-
-
 def deletion_mc(
     box_gas: Atoms,
-    gas_templates: Dict[str, Atoms],
-    bond_tol: float = 0.25,
-) -> Tuple[Atoms, Atoms, str]:
+    species: str,
+    mol_species: Dict[int, Optional[str]],
+) -> Tuple[Atoms, Atoms, str, int]:
     """
-    Delete a single diatomic molecule from box_gas, supporting homo- and heteronuclear diatomics.
-    PBC-aware via ASE neighbor_list (minimum-image distances).
+    Delete one molecule of ``species``, chosen uniformly among those present.
 
-    The molecule to delete is chosen UNIFORMLY at random among all valid
-    diatomics found. Uniform choice is required for detailed balance: the
-    deletion acceptance prefactor n/V assumes the deleted molecule was
-    selected with probability 1/n.
+    Molecules are identified by their per-atom tags (molecule ids) — no bond
+    re-matching — so any molecular formula works. Uniform choice is required
+    for detailed balance: the deletion acceptance prefactor n/V assumes the
+    deleted molecule was selected with probability 1/n.
 
     Args:
-        box_gas: Current gas box (mixture of diatomic molecules).
-        gas_templates: Dict mapping molecule label -> 2-atom ASE Atoms template.
-                       The label identifies the species; element identity is taken
-                       from the template itself.
-        bond_tol: Fractional tolerance added to template bond length to define cutoff.
+        box_gas: Current gas box, atoms tagged with molecule ids.
+        species: Species name to delete.
+        mol_species: Mapping from molecule id to species name (``None`` entries
+                     are frozen spectators and never chosen). The caller pops
+                     the returned id from this mapping once the move is accepted.
 
     Returns:
-        (gas_mol, updated_box_gas, name) where ``name`` is the template label of
-        the deleted species (so callers need not re-derive it from symbols).
+        (gas_mol, updated_box_gas, species, deleted_mol_id)
 
     Raises:
-        RuntimeError if no deletable molecule is found.
+        RuntimeError if no molecule of ``species`` is present.
     """
-    if len(box_gas) < 2:
-        raise RuntimeError("Deletion failed: box_gas has fewer than 2 atoms")
+    candidates = [m for m, s in mol_species.items() if s == species]
+    if not candidates:
+        raise RuntimeError(f"Deletion failed: no '{species}' molecules present")
 
-    symbols = np.array(box_gas.get_chemical_symbols())
-
-    # Build cutoff map for allowed element pairs from templates, and remember
-    # which template label each element pair corresponds to.
-    cutoff_by_pair: Dict[Pair, float] = {}
-    name_by_pair: Dict[Pair, str] = {}
-    for name, templ in gas_templates.items():
-        syms = templ.get_chemical_symbols()
-        if len(syms) != 2:
-            raise ValueError(f"Template '{name}' must contain exactly 2 atoms.")
-        a, b = syms[0], syms[1]
-        bond = _bond_length_from_template(templ)
-        key = _pair_key(a, b)
-        cutoff_by_pair[key] = bond * (1.0 + float(bond_tol))
-        name_by_pair[key] = name
-
-    if not cutoff_by_pair:
-        raise ValueError("No gas templates provided.")
-
-    r_max = max(cutoff_by_pair.values())
-
-    # PBC-aware neighbor search (MIC distances)
-    i_idx, j_idx, d_ij = neighbor_list("ijd", box_gas, cutoff=r_max)
-
-    # neighbor_list returns directed pairs; keep i<j to avoid duplicates
-    mask = i_idx < j_idx
-    i_idx = i_idx[mask]
-    j_idx = j_idx[mask]
-    d_ij = d_ij[mask]
-
-    # Identify whole molecules by greedy shortest-first disjoint matching
-    # (each atom belongs to at most one diatomic; same scheme as
-    # extract_box_gas), then pick one uniformly at random.
-    order = np.argsort(d_ij)
-    used = np.zeros(len(box_gas), dtype=bool)
-    molecules = []  # (dist, i, j, pair_key)
-    for k in order:
-        i, j = int(i_idx[k]), int(j_idx[k])
-        if used[i] or used[j]:
-            continue
-        key = _pair_key(symbols[i], symbols[j])
-        cut = cutoff_by_pair.get(key)
-        if cut is None or float(d_ij[k]) > cut:
-            continue
-        molecules.append((float(d_ij[k]), i, j, key))
-        used[i] = True
-        used[j] = True
-
-    if not molecules:
-        logger.warning(
-            "No valid diatomic molecule found for deletion using templates %s (r_max=%.3f Å)",
-            list(gas_templates.keys()),
-            r_max,
+    chosen = random.choice(candidates)
+    mask = box_gas.get_tags() == chosen
+    if not mask.any():
+        raise RuntimeError(
+            f"Inconsistent state: molecule id {chosen} ('{species}') has no atoms in the gas box"
         )
-        raise RuntimeError("Deletion failed")
 
-    dist, i, j, key = random.choice(molecules)
-    pos = box_gas.get_positions()
+    gas_mol = box_gas[mask]
+    remaining = box_gas[~mask]
 
-    # Preserve the actual element order as it appears in the box
-    gas_mol = Atoms([symbols[i], symbols[j]], [pos[i], pos[j]])
-
-    # Remove atoms i and j from the box
-    keep = [k not in (i, j) for k in range(len(box_gas))]
-
-    name = name_by_pair[key]
     logger.debug(
-        "Deleted diatomic %s (%s-%s) indices (%d, %d) at MIC distance %.3f Å (cutoff %.3f Å)",
-        name, symbols[i], symbols[j], i, j, dist, cutoff_by_pair[key]
+        "Deleted %s (mol_id %d, %d atoms); %d atoms remain",
+        species, chosen, int(mask.sum()), len(remaining),
     )
-    return gas_mol, box_gas[keep], name
+    return gas_mol, remaining, species, int(chosen)
 
 
 def choose_unbiased_move(

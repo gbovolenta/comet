@@ -18,15 +18,20 @@ restart_path: examples/final.lammps  # LAMMPS data file with Atoms (and Velociti
 elements:
   - Fe
   - H
-slab: Fe                             # Element whose atom IDs are preserved between cycles
 
-gas_list:                            # Gas species controlled/tracked (diatomic templates)
-  - H2
-gas_masses:                          # Molecular masses [amu], aligned with gas_list
-  - 2.01568
+gas_list:                            # Gas species controlled/tracked; any molecular
+  - H2                               # formula works (H2, CO, H2O, CH3OH, ...)
 gas_template_dir: path/to/templates/ # Directory with one <species>.xyz per gas (e.g. H2.xyz)
 
-z_cutoff: 15.14698231002696          # Z cutoff (Å): atoms above this are the GCMC gas region
+# Optional keys (both redundant, kept as consistency checks):
+# slab: Fe          # sanity-checked against `elements`; slab atoms are found
+#                   # geometrically, so multi-element slabs need no declaration
+# gas_masses:       # molecular masses [amu] aligned with gas_list; masses are
+#   - 2.01568       # derived from the templates, a mismatch only logs a warning
+
+z_cutoff: 15.14698231002696          # Z cutoff (Å): molecules whose center of mass lies
+                                     # above this form the GCMC gas region (whole molecules,
+                                     # never split at the boundary)
 temperature: 823.0                   # Simulation temperature [K]
 
 # Preferred μ input: per-species partial pressures. Each listed species is
@@ -53,14 +58,14 @@ steps: 1000                          # Number of Monte Carlo steps
 # pressure_unit: bar
 # y1: 0.75                           # split for a 2-species binary mixture
 
-# --- Binary N2/H2 variant (needs an Fe/N/H restart file + N2.xyz template) -----
-# elements: [Fe, N, H]               # type order must match your LAMMPS data file
-# slab: Fe
-# gas_list:   [N2, H2]
-# gas_masses: [28.0134, 2.01568]
-# gas_template_dir: path/to/templates/   # must contain N2.xyz and H2.xyz
+# --- Mixture variant (needs a matching restart file + one .xyz per species) ----
+# Species are recognized by composition, so any molecular formulas work as long
+# as no two species share one (isomers are rejected at load time).
+# elements: [Cu, C, O, H]            # type order must match your LAMMPS data file
+# gas_list: [CH3OH, H2]
+# gas_template_dir: path/to/templates/   # must contain CH3OH.xyz and H2.xyz
 # partial_pressures:
-#   N2: 0.75
+#   CH3OH: 0.75
 #   H2: 0.25
 # pressure_unit: bar
 

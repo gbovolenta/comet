@@ -16,15 +16,15 @@ def test_yaml_loader_preserves_keys():
     assert isinstance(config, dict)
 
     # Keys the workflow actually consumes (see comet.workflows.run).
+    # `slab` and `gas_masses` are optional (redundant consistency checks) and
+    # intentionally absent from the example.
     expected_keys = {
         "energy_backend",
         "bdir",
         "model_dir",
         "restart_path",
         "elements",
-        "slab",
         "gas_list",
-        "gas_masses",
         "gas_template_dir",
         "z_cutoff",
         "temperature",

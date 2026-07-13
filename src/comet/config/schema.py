@@ -39,9 +39,9 @@ class RunConfig(BaseModel):
 
     # --- system ---
     elements: List[str]
-    slab: str
+    slab: Optional[str] = None                # informational; sanity-checked against `elements`
     gas_list: List[str]
-    gas_masses: List[float]
+    gas_masses: Optional[List[float]] = None  # redundant: masses derive from templates
     z_cutoff: float
     temperature: float
 
@@ -91,12 +91,12 @@ class RunConfig(BaseModel):
 
     @model_validator(mode="after")
     def _check_consistency(self) -> "RunConfig":
-        if len(self.gas_masses) != len(self.gas_list):
+        if self.gas_masses is not None and len(self.gas_masses) != len(self.gas_list):
             raise ValueError(
                 f"gas_masses (len {len(self.gas_masses)}) must match "
                 f"gas_list (len {len(self.gas_list)})"
             )
-        if self.slab not in self.elements:
+        if self.slab is not None and self.slab not in self.elements:
             raise ValueError(f"slab {self.slab!r} must be one of elements {self.elements}")
 
         if self.partial_pressures is not None:
@@ -118,8 +118,14 @@ class RunConfig(BaseModel):
 
         return self
 
-    def gas_masses_by_species(self) -> Dict[str, float]:
-        """Return the `{species: mass}` mapping (aligned `gas_list`/`gas_masses`)."""
+    def gas_masses_by_species(self) -> Optional[Dict[str, float]]:
+        """Return the declared `{species: mass}` mapping, or ``None`` if unset.
+
+        Masses are normally derived from the gas templates; a declared
+        `gas_masses` list is only used as a consistency check.
+        """
+        if self.gas_masses is None:
+            return None
         return dict(zip(self.gas_list, self.gas_masses))
 
 

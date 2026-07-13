@@ -20,9 +20,15 @@ You will need to provide your own:
 
 - An energy backend: a **MACE model file** (`mace`, the default) or the
   **`orca` executable on your `PATH`** plus `orca_*` settings (`energy_backend: orca`)
-- A **gas-template directory** with one `<species>.xyz` file per gas (e.g. `H2.xyz`, `N2.xyz`)
+- A **gas-template directory** with one `<species>.xyz` file per gas (e.g. `H2.xyz`,
+  `CH3OH.xyz`) — any molecular formula works; species are recognized by composition
 - A **LAMMPS restart/data file** — a small example (`examples/final.lammps`, an Fe slab
   with H₂ gas) is included with the repository, so the quickstart runs once you supply a backend and templates
+
+Neither the surface nor the gas is hardcoded: the slab may contain any mix of
+elements (including elements shared with the gas), molecular masses are derived
+from the templates, and molecules are assigned to the gas region by center of
+mass, so they are never split at the `z_cutoff` boundary.
 
 Show the available commands:
 

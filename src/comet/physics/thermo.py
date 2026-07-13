@@ -344,19 +344,3 @@ def mu_convergence_status(
             converged.add(gas)
 
     return inactive, converged, unconverged
-
-def filter_gas_templates_by_species(gas_templates: dict, species_to_keep: set) -> dict:
-    """Filter a template dictionary to a selected set of species.
-
-    Args:
-        gas_templates: Mapping from species name to ASE template.
-        species_to_keep: Species names to retain.
-
-    Returns:
-        dict: Filtered gas-template mapping.
-    """
-    filtered = {g: t for g, t in gas_templates.items() if g in species_to_keep}
-    removed = set(gas_templates) - set(filtered)
-    if removed:
-        logger.info("Filtered out templates: %s", sorted(removed))
-    return filtered

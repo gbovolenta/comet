@@ -8,10 +8,9 @@ stub in tests.
 
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 from ase import Atoms
@@ -42,11 +41,7 @@ from comet.physics.thermo import (
 )
 from comet.potentials.backends import EnergyBackend
 from comet.potentials.templates import load_centered_gas_templates
-from comet.system.partition import (
-    all_integral_diatomics,
-    extract_box_gas,
-    per_species_atom_counts,
-)
+from comet.system.molecules import partition_by_molecule
 from comet.workflows.logging_utils import (
     _fmt_energy,
     _fmt_int,
@@ -78,6 +73,27 @@ class GcmcState:
     region_bounds: Tuple[float, ...]     # GCMC insertion bounds
     gas_templates_all: Dict[str, Atoms]  # master per-species templates
     gas_dict: Dict[str, float]           # per-species masses [amu]
+    mol_species: Dict[int, Optional[str]]  # molecule id -> species (None = spectator)
+    next_mol_id: int                     # first unused molecule id
+
+
+def _gas_masses(config: RunConfig, gas_templates: Dict[str, Atoms]) -> Dict[str, float]:
+    """Per-species molecular masses [amu], derived from template composition.
+
+    A `gas_masses` list in the config is only cross-checked (it is redundant
+    with the template): a mismatch beyond 0.05 amu logs a warning and the
+    template-derived value wins.
+    """
+    gas_dict = {name: float(t.get_masses().sum()) for name, t in gas_templates.items()}
+    if config.gas_masses is not None:
+        for name, declared in zip(config.gas_list, config.gas_masses):
+            if abs(declared - gas_dict[name]) > 0.05:
+                logger.warning(
+                    "gas_masses[%s] = %.4f amu differs from the template-derived mass "
+                    "%.4f amu; using the template value.",
+                    name, declared, gas_dict[name],
+                )
+    return gas_dict
 
 
 def build_initial_system(config: RunConfig, backend: EnergyBackend) -> Optional[GcmcState]:
@@ -87,8 +103,8 @@ def build_initial_system(config: RunConfig, backend: EnergyBackend) -> Optional[
     initial energy cannot be obtained; otherwise returns the populated state.
     """
     region_bounds = bounds_from_restart(config.restart_path, config.z_cutoff)
-    gas_dict = config.gas_masses_by_species()
     gas_templates = load_gas_templates(config.gas_list, config.gas_template_dir)
+    gas_dict = _gas_masses(config, gas_templates)
 
     try:
         atoms = get_last_frame(config.restart_path)
@@ -96,62 +112,18 @@ def build_initial_system(config: RunConfig, backend: EnergyBackend) -> Optional[
         logger.critical(f"Cannot load trajectory: {e}")
         return None
 
-    # Extract gas box and surface, adjusting z_cutoff until per-species molecule
-    # counts are integral (operates on a local cutoff, not the config).
+    # Split into gas box and slab by molecule COM: whole molecules are assigned
+    # to one side, so per-species counts are integral by construction and no
+    # cutoff adjustment is needed. Gas molecules are tagged with persistent ids.
     z_cut = float(config.z_cutoff)
-    box_gas, slab_ads, gas_count, gas_counts, idx_in, idx_out, xyz_dict = extract_box_gas(
-        atoms, z_cut, gas_templates=gas_templates,
+    box_gas, slab_ads, gas_counts, mol_species, next_mol_id = partition_by_molecule(
+        atoms, z_cut, gas_templates,
     )
-
-    z_step = 0.1
-    max_adjust = 5.0  # safety: max 5 Å shift
-
-    counts = per_species_atom_counts(box_gas, gas_dict)
-    if all_integral_diatomics(counts):
-        logger.info(
-            "All gas species have integral molecule counts at z_cutoff = %.2f Å. Counts: %s",
-            z_cut,
-            {g: n // 2 for g, n in counts.items()},
-        )
-    else:
-        logger.warning(
-            "Non-integral molecule count detected at z_cutoff = %.2f Å. Atom counts: %s. Adjusting cutoff.",
-            z_cut,
-            counts,
-        )
-
-        moved = 0.0
-        while (not all_integral_diatomics(counts)) and (moved <= max_adjust):
-            # move cutoff downward (includes a bit more atoms into gas region)
-            z_cut -= z_step
-            moved += z_step
-
-            box_gas, slab_ads, gas_count, gas_counts, idx_in, idx_out, xyz_dict = extract_box_gas(
-                atoms, z_cut, gas_templates=gas_templates,
-            )
-            counts = per_species_atom_counts(box_gas, gas_dict)
-
-            logger.info(
-                "Adjusted z_cutoff = %.2f Å → atom counts: %s → molecule counts: %s",
-                z_cut,
-                counts,
-                {g: n // 2 for g, n in counts.items()},
-            )
-
-        if not all_integral_diatomics(counts):
-            logger.warning(
-                "Failed to achieve integral per-species counts after shifting z_cutoff by %.2f Å "
-                "(final z_cutoff = %.2f Å). Final atom counts: %s",
-                moved,
-                z_cut,
-                counts,
-            )
-        else:
-            logger.info(
-                "Integral per-species molecule counts achieved at z_cutoff = %.2f Å. Molecules: %s",
-                z_cut,
-                {g: n // 2 for g, n in counts.items()},
-            )
+    gas_count = sum(gas_counts.values())
+    logger.info(
+        "Molecule partition at z_cutoff = %.2f Å: %s (gas box: %d atoms, slab: %d atoms)",
+        z_cut, gas_counts, len(box_gas), len(slab_ads),
+    )
 
     # Initial energy of the gas box.
     try:
@@ -214,6 +186,8 @@ def build_initial_system(config: RunConfig, backend: EnergyBackend) -> Optional[
         region_bounds=region_bounds,
         gas_templates_all=gas_templates_all,
         gas_dict=gas_dict,
+        mol_species=mol_species,
+        next_mol_id=next_mol_id,
     )
 
 
@@ -235,6 +209,8 @@ def run_mc_loop(state: GcmcState, config: RunConfig, backend: EnergyBackend) -> 
     gas_dict = state.gas_dict
     region_bounds = state.region_bounds
     gas_templates_all = state.gas_templates_all
+    mol_species = state.mol_species
+    next_mol_id = state.next_mol_id
 
     inactive, converged, unconverged = mu_convergence_status(mu_dict, mu_current, tol)
     logger.info("Initial μ_current: %s", _format_mu_dict(mu_current))
@@ -284,12 +260,16 @@ def run_mc_loop(state: GcmcState, config: RunConfig, backend: EnergyBackend) -> 
                 gas_templates_active = {move_name: gas_templates_all[move_name]}
 
             # Propose move
+            del_id = None
             if ins:
-                new_mol, new_box, ins_name = insertion_mc(gas_templates_active, region_bounds, box_gas)
+                new_mol, new_box, ins_name = insertion_mc(
+                    gas_templates_active, region_bounds, box_gas, mol_id=next_mol_id,
+                )
                 move_name = ins_name
             else:
-                if gas_count == 0:
-                    logger.info("Step %d proposal skipped: no gas molecules available for deletion", step)
+                if gas_counts.get(move_name, 0) == 0:
+                    logger.info("Step %d proposal skipped: no %s molecules available for deletion",
+                                step, move_name)
                     mu_current = chemical_potentials_from_particles(T, V, gas_counts, gas_dict)
                     inactive, converged, unconverged = mu_convergence_status(mu_dict, mu_current, tol)
                     if config.log_mu_diagnostics:
@@ -298,11 +278,13 @@ def run_mc_loop(state: GcmcState, config: RunConfig, backend: EnergyBackend) -> 
                                 sorted(converged), sorted(unconverged), sorted(inactive))
                     continue
                 try:
-                    del_mol, new_box, move_name = deletion_mc(box_gas, gas_templates_active)
+                    del_mol, new_box, move_name, del_id = deletion_mc(box_gas, move_name, mol_species)
                 except RuntimeError:
                     # fallback to insertion (same active templates)
                     logger.info("Step %d deletion proposal failed; falling back to insertion.", step)
-                    new_mol, new_box, ins_name = insertion_mc(gas_templates_active, region_bounds, box_gas)
+                    new_mol, new_box, ins_name = insertion_mc(
+                        gas_templates_active, region_bounds, box_gas, mol_id=next_mol_id,
+                    )
                     move_name = ins_name
                     ins = True
 
@@ -335,17 +317,15 @@ def run_mc_loop(state: GcmcState, config: RunConfig, backend: EnergyBackend) -> 
                 box_gas = new_box
                 E_current = E_new
 
-                # update counts after accept (homonuclear diatomics assumption)
-                symbols = box_gas.get_chemical_symbols()
-                atom_counts = Counter(symbols)
-
-                gas_counts = {}
-                for gas in gas_dict:
-                    elem = gas[:-1]
-                    n_atoms = atom_counts.get(elem, 0)
-                    if n_atoms % 2 != 0:
-                        logger.warning("Odd number of %s atoms in gas box: %d", elem, n_atoms)
-                    gas_counts[gas] = n_atoms // 2
+                # Update molecule bookkeeping incrementally: the moves return
+                # the species, and molecule identity lives in tags/mol_species.
+                if ins:
+                    mol_species[next_mol_id] = move_name
+                    next_mol_id += 1
+                    gas_counts[move_name] = gas_counts.get(move_name, 0) + 1
+                else:
+                    mol_species.pop(del_id)
+                    gas_counts[move_name] -= 1
 
                 gas_count = sum(gas_counts.values())
 
@@ -403,6 +383,8 @@ def run_mc_loop(state: GcmcState, config: RunConfig, backend: EnergyBackend) -> 
     state.gas_counts = gas_counts
     state.E_current = E_current
     state.mu_current = mu_current
+    state.mol_species = mol_species
+    state.next_mol_id = next_mol_id
     return state
 
 
@@ -416,7 +398,7 @@ def write_restart(state: GcmcState, config: RunConfig) -> None:
         old_atoms_by_id=old_atoms_by_id,
         new_struct=new_struct,
         elements=config.elements,
-        slab_element=config.slab,
+        n_slab=len(state.slab_ads),
         tol=1e-4,
         reuse_old_ids_for_gas=False,
     )

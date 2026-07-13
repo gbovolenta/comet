@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 from ase import Atoms
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -45,8 +46,9 @@ def test_insertion_preserves_bond_length_and_places_com_in_bounds():
 
     for _ in range(50):
         box = Atoms(cell=[20.0, 20.0, 20.0], pbc=[True, True, False])
-        new_mol, new_box, name = insertion_mc(templates, bounds, box)
+        new_mol, new_box, name = insertion_mc(templates, bounds, box, mol_id=1)
         assert name == "N2"
+        assert set(new_mol.get_tags()) == {1}
         p = new_mol.get_positions()
         assert np.isclose(np.linalg.norm(p[0] - p[1]), bond)
         com = new_mol.get_center_of_mass()
@@ -62,36 +64,47 @@ def _h2_at(center, bond):
 
 def test_deletion_chooses_uniformly_among_molecules():
     random.seed(3)
-    templates = {"H2": Atoms("HH", [[0, 0, 0], [0, 0, 0.74]])}
-    # Four well-separated H2 molecules with distinct bond lengths, all within
-    # the deletion cutoff (0.74 * 1.25 = 0.925 Å).
+    # Four H2 molecules, tagged 1-4; deletion picks a mol_id uniformly.
     centers = [(3.0, 3.0, 3.0), (3.0, 12.0, 3.0), (12.0, 3.0, 3.0), (12.0, 12.0, 3.0)]
-    bonds = [0.70, 0.72, 0.74, 0.76]
+    mol_species = {1: "H2", 2: "H2", 3: "H2", 4: "H2"}
 
     n_trials = 400
-    counts = [0, 0, 0, 0]
+    counts = {1: 0, 2: 0, 3: 0, 4: 0}
     for _ in range(n_trials):
         box = Atoms(cell=[15.0, 15.0, 15.0], pbc=[True, True, False])
-        for center, bond in zip(centers, bonds):
-            box += _h2_at(center, bond)
+        for mol_id, center in enumerate(centers, start=1):
+            mol = _h2_at(center, 0.74)
+            mol.set_tags(mol_id)
+            box += mol
 
-        _, new_box, name = deletion_mc(box, templates)
+        gas_mol, new_box, name, del_id = deletion_mc(box, "H2", dict(mol_species))
         assert name == "H2"
+        assert len(gas_mol) == 2
         assert len(new_box) == 6
+        assert del_id not in set(new_box.get_tags())
+        counts[del_id] += 1
 
-        remaining = new_box.get_positions()
-        gone = [
-            m
-            for m, center in enumerate(centers)
-            if not np.any(np.linalg.norm(remaining - np.array(center), axis=1) < 1.0)
-        ]
-        assert len(gone) == 1
-        counts[gone[0]] += 1
+    # Every molecule must be deletable with roughly equal frequency —
+    # uniform 1/n choice is what the deletion acceptance prefactor assumes.
+    assert all(c > 0 for c in counts.values())
+    # Expected 100 each, std ~8.7; allow a generous band.
+    assert all(60 <= c <= 140 for c in counts.values())
 
-    # Every molecule must be deletable — in particular the choice must not
-    # collapse onto the shortest bond (the old prefer-closest behavior, which
-    # broke detailed balance).
-    assert counts[0] < n_trials
-    assert all(c > 0 for c in counts)
-    # Roughly uniform: expected 100 each, std ~8.7; allow a generous band.
-    assert all(60 <= c <= 140 for c in counts)
+
+def test_deletion_skips_spectators_and_other_species():
+    random.seed(5)
+    box = Atoms(cell=[15.0, 15.0, 15.0], pbc=[True, True, False])
+    h2 = _h2_at((3.0, 3.0, 3.0), 0.74)
+    h2.set_tags(1)
+    spectator = _h2_at((12.0, 12.0, 3.0), 0.74)
+    spectator.set_tags(2)
+    box += h2
+    box += spectator
+    mol_species = {1: "H2", 2: None}  # id 2 is a frozen spectator
+
+    for _ in range(20):
+        _, _, _, del_id = deletion_mc(box, "H2", mol_species)
+        assert del_id == 1
+
+    with pytest.raises(RuntimeError):
+        deletion_mc(box, "N2", mol_species)

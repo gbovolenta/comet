@@ -34,7 +34,7 @@ def test_assign_ids_preserve_slab_reuses_gaps_for_gas():
         old_atoms_by_id=old_atoms_by_id,
         new_struct=new_struct,
         elements=["Fe", "N", "H"],
-        slab_element="Fe",
+        n_slab=2,
         tol=1e-8,
         reuse_old_ids_for_gas=False,
     )
@@ -64,7 +64,7 @@ def test_assign_ids_preserve_slab_can_still_preserve_old_gas_ids():
         old_atoms_by_id=old_atoms_by_id,
         new_struct=new_struct,
         elements=["Fe", "H"],
-        slab_element="Fe",
+        n_slab=1,
         tol=1e-8,
         reuse_old_ids_for_gas=True,
     )
