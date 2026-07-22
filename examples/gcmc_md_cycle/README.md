@@ -50,6 +50,22 @@ provide. Cycling polyatomics end-to-end therefore requires an MLP for the MD
 half (production setup below); with `pair_style mace` the ternary case needs
 nothing beyond a third template and a `partial_pressures` entry.
 
+## No LAMMPS? `comet cycle` (built-in ASE MD)
+
+If no MD engine is available, comet can run the whole alternation itself:
+add an `md:` block to the config (see `examples/config.yaml`) and run
+
+```bash
+comet cycle config.yaml
+```
+
+The MD half then uses ASE dynamics with the SAME MACE calculator as the GCMC
+half (Bussi/CSVR thermostat, frozen bottom slab, reflective lid — the same
+recipe as the LAMMPS inputs here), which also makes the two halves
+PES-consistent by construction. Per-cycle `cycle_<i>.lammpsdata` checkpoints
+are written. The file-based LAMMPS route in this directory remains the choice
+when you want LAMMPS' MD feature set (Kokkos GPU throughput, PLUMED, etc.).
+
 ## Testbed vs production
 
 The example as committed is a **CPU testbed**: it validates the cycle

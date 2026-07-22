@@ -19,6 +19,24 @@ PressureUnit = Literal["Pa", "bar", "atm", "torr"]
 EnergyBackend = Literal["mace", "orca"]
 
 
+class MDConfig(BaseModel):
+    """Settings for the ASE-MD half of `comet cycle` (GCMC <-> MD alternation).
+
+    Defaults mirror the production LAMMPS recipe: CSVR (Bussi) thermostat at
+    the run temperature, frozen bottom slab layers, reflective lid at the cell
+    top so gas cannot escape the non-periodic z direction.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    n_cycles: int = 3            # GCMC <-> MD alternations
+    md_steps: int = 2000         # MD steps per cycle
+    timestep_fs: float = 0.5     # [fs]
+    tau_t_ps: float = 0.05       # CSVR (Bussi) time constant [ps]
+    freeze_bottom: float = 2.0   # atoms with z below this [Å] are held fixed
+    traj_every: int = 0          # extxyz frame interval during MD (0 = off)
+
+
 class RunConfig(BaseModel):
     """Validated COMET run configuration.
 
@@ -50,6 +68,9 @@ class RunConfig(BaseModel):
     pressure: Optional[float] = None
     pressure_unit: PressureUnit = "bar"
     y1: float = 0.75
+
+    # --- GCMC <-> MD cycling (only used by `comet cycle`) ---
+    md: Optional[MDConfig] = None
 
     # --- Monte Carlo controls ---
     steps: int

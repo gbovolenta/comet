@@ -6,6 +6,15 @@ All notable changes to COMET are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **`comet cycle` — built-in GCMC↔MD alternation via ASE MD (no LAMMPS
+  needed).** With an `md:` config block, comet alternates the GCMC loop with
+  ASE dynamics on slab+gas using the same cached MACE calculator for both
+  halves (PES-consistent by construction): Bussi/CSVR thermostat at the run
+  temperature, frozen bottom slab layers (`freeze_bottom`), a reflective lid
+  at the cell top, molecule-COM re-partitioning after each MD segment, and
+  per-cycle `cycle_<i>.lammpsdata` checkpoints with real velocities.
+  MACE-backend only (`EnergyBackend.calculator_factory`); orca is rejected
+  with a clear error.
 - **End-to-end GCMC↔MD cycle example** (`examples/gcmc_md_cycle/`): a
   scheduler-agnostic driver alternating comet GCMC with LAMMPS MD via the
   restart-file contract, with two runnable CPU-testbed variants — pure H2/Fe

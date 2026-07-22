@@ -18,7 +18,7 @@ from comet.potentials.backends import build_energy_backend
 from comet.workflows.logging_utils import logger, setup_logging
 from comet.workflows.stages import build_initial_system, run_mc_loop, write_restart
 
-__all__ = ["run", "setup_logging"]
+__all__ = ["cycle", "run", "setup_logging"]
 
 
 def _log_run_header(config: RunConfig) -> None:
@@ -80,4 +80,57 @@ def run(config_path: str) -> int:
 
     state = run_mc_loop(state, config, backend)
     write_restart(state, config)
+    return 0
+
+
+def cycle(config_path: str) -> int:
+    """Alternate GCMC and ASE-MD in one process (no external MD engine).
+
+    Requires an ``md:`` block in the configuration and a backend that can
+    provide MD forces (currently ``mace``). Each cycle runs the GCMC loop,
+    then an MD segment on slab+gas with the same calculator, re-partitions by
+    molecule COM, and writes a ``cycle_<i>.lammpsdata`` checkpoint.
+
+    Args:
+        config_path: Path to the YAML configuration file.
+
+    Returns:
+        int: Process-style exit status (0 on success, 1 on a setup failure).
+    """
+    from comet.workflows.md import run_md, write_cycle_checkpoint
+
+    setup_logging()
+    config = load_run_config(config_path)
+    if config.md is None:
+        logger.critical("comet cycle requires an `md:` block in the configuration")
+        return 1
+    if config.seed is not None:
+        random.seed(config.seed)
+        np.random.seed(config.seed)
+        logger.info("Seeded RNGs with seed=%s", config.seed)
+    Path(config.bdir).mkdir(parents=True, exist_ok=True)
+    _log_run_header(config)
+
+    backend = build_energy_backend(config)
+    if backend.calculator_factory is None:
+        logger.critical(
+            "comet cycle requires a backend with MD forces; "
+            "backend %r provides none (use energy_backend: mace)",
+            backend.name,
+        )
+        return 1
+    calculator = backend.calculator_factory()
+
+    state = build_initial_system(config, backend)
+    if state is None:
+        return 1
+
+    n_cycles = config.md.n_cycles
+    for i in range(1, n_cycles + 1):
+        logger.info("=== cycle %d/%d: GCMC ===", i, n_cycles)
+        state = run_mc_loop(state, config, backend)
+        logger.info("=== cycle %d/%d: MD ===", i, n_cycles)
+        state = run_md(state, config, calculator, backend, cycle_index=i)
+        write_cycle_checkpoint(state, config, Path(config.bdir) / f"cycle_{i}.lammpsdata")
+
     return 0

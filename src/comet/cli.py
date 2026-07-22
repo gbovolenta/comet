@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from comet.workflows import cycle as workflow_cycle
 from comet.workflows import run as workflow_run
 
 
@@ -33,6 +34,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     run_parser.set_defaults(func=_handle_run)
 
+    cycle_parser = subparsers.add_parser(
+        "cycle",
+        help="Alternate GCMC and ASE-MD in one process (requires an `md:` config block)",
+    )
+    cycle_parser.add_argument(
+        "config",
+        metavar="CONFIG",
+        help="Path to the YAML configuration file",
+    )
+    cycle_parser.set_defaults(func=_handle_cycle)
+
     return parser
 
 
@@ -46,8 +58,12 @@ def _handle_run(args: argparse.Namespace) -> int:
         int: Workflow exit status.
     """
     config_path = args.config
-    #return workflow_run.run(config_path)
     return workflow_run(config_path)
+
+
+def _handle_cycle(args: argparse.Namespace) -> int:
+    """Dispatch the parsed `cycle` subcommand arguments to the workflow."""
+    return workflow_cycle(args.config)
 
 
 def main(argv: list[str] | None = None) -> int:
