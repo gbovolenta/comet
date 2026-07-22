@@ -1,0 +1,54 @@
+# GCMC->MD testbed input, adapted from production
+# (/home/gbovolenta/FeH-MLP-1/medium/700K/150atm_H2/GCMC/MD_cycle*/input.lammps).
+# Structure kept 1:1; blocks marked PRODUCTION are the swap points for the
+# real GPU run (LAMMPS-MACE + fine-tuned model + Kokkos).
+
+variable        NSTEPS          equal 2000       # PRODUCTION: 200000 (100 ps)
+variable        DUMP_FREQ       equal 50
+variable        TEMP            equal 723
+variable        SEED1           equal 110
+variable        TAU_T           equal 0.05       # CSVR time constant [ps]
+variable        Z_CELL          equal 40.14698231002696
+variable        Z_BOTTOM        equal 2.0        # slab atoms below this z are frozen
+
+units           metal
+boundary        p p f
+
+atom_style      atomic
+atom_modify     map yes
+newton          on
+
+read_data       data_GCMC.lammps
+
+# Frozen bottom by region (production uses "id <= 160"; region is robust to
+# the ID relabeling comet does between cycles).
+region          rbottom block INF INF INF INF INF ${Z_BOTTOM}
+group           bottom region rbottom
+group           free_atoms subtract all bottom
+
+# --- PRODUCTION: replace this whole potential block with ---
+#   pair_style mace no_domain_decomposition
+#   pair_coeff * * /path/to/finetuned.model-lammps.pt Fe H
+# Testbed stand-in: EAM Fe + Morse H2 (D=4.75 eV, a=1.93 1/A, r0=0.741 A,
+# real H2 bond so molecules stay intact) + weak LJ Fe-H physisorption.
+pair_style      hybrid eam/fs morse 4.0 lj/cut 8.0
+pair_coeff      * * eam/fs Fe_mm.eam.fs Fe NULL
+pair_coeff      2 2 morse 4.75 1.93 0.741
+pair_coeff      1 2 lj/cut 0.02 2.5
+
+# H2 vibration period ~8 fs under Morse -> small timestep in the testbed.
+timestep        0.00025          # ps; PRODUCTION: 0.0005
+thermo          ${DUMP_FREQ}
+thermo_style    custom step temp press ke pe etotal
+thermo_modify   flush yes
+
+dump            myDump all custom ${DUMP_FREQ} traj.lammps id type element x y z vx vy vz
+dump_modify     myDump element Fe H append yes
+
+# NVE + CSVR on the mobile atoms; reflective lid so gas cannot leave the box.
+fix             fix_nve free_atoms nve
+fix             fix_temp free_atoms temp/csvr ${TEMP} ${TEMP} ${TAU_T} ${SEED1}
+fix             fix_wall all wall/reflect zhi ${Z_CELL}
+
+run             ${NSTEPS}
+write_data      final.lammpsdata

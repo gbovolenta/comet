@@ -5,6 +5,17 @@ All notable changes to COMET are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- **End-to-end GCMC↔MD cycle example** (`examples/gcmc_md_cycle/`): a
+  scheduler-agnostic driver alternating comet GCMC with LAMMPS MD via the
+  restart-file contract, with two runnable CPU-testbed variants — pure H2/Fe
+  and a binary H2/N2 mixture (per-species pressure control) — plus NH3
+  template, seeds (+ generator), the Mendelev Fe EAM, a Slurm wrapper, and a
+  README covering the production swap points (LAMMPS-MACE/Kokkos, matched
+  fine-tuned model) and known deployment traps. Both variants validated on
+  cluster runs; mixture GCMC also covered by stub-backend pipeline tests
+  (`tests/test_mixture_workflow.py`, binary H2/N2 and ternary H2/N2/NH3).
+
 ### Fixed
 - **Package module loggers were silently dropped from gcmc_run.log.**
   `setup_logging` only attached handlers to the `"gcmc"` logger, so anything
