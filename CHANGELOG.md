@@ -6,6 +6,14 @@ All notable changes to COMET are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Fixed
+- **Package module loggers were silently dropped from gcmc_run.log.**
+  `setup_logging` only attached handlers to the `"gcmc"` logger, so anything
+  logged via `logging.getLogger(__name__)` under the `comet.*` namespace —
+  spectator-fragment warnings from molecule recognition, the MACE
+  model/device line — propagated to the handler-less root logger and never
+  reached the file. Handlers are now attached to the `comet` parent logger
+  as well (found when spectator warnings were missing during GCMC↔MD
+  testbed debugging).
 - **Shared-calculator cross-talk crashed the MC loop at the first rejected
   move (MACE backend).** Since the calculator cache (v0.3.1, 4ce973f) one
   MACE calculator instance is attached to every structure it evaluates, but

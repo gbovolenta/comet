@@ -16,21 +16,33 @@ def setup_logging() -> logging.Logger:
     Configure and return a logger that writes DEBUG-level messages to the file 'gcmc_run.log'
     and INFO-level messages to the console. All log entries exclude timestamps.
 
+    The same handlers are attached to BOTH the workflow logger ("gcmc") and the
+    package parent logger ("comet"), so module loggers created with
+    ``logging.getLogger(__name__)`` (e.g. ``comet.system.molecules`` spectator
+    warnings, ``comet.potentials.mace`` device info) land in the log file too —
+    previously they propagated to the handler-less root logger and were lost.
+
     Safe to call more than once per process: handlers (and therefore the
     'gcmc_run.log' file) are created only on the first call. This is invoked from
     `run()` rather than at import time so merely importing the package does not
     create a log file.
 
     Returns:
-        logging.Logger: The configured logger instance.
+        logging.Logger: The configured workflow logger instance.
     """
-    log = logging.getLogger("gcmc")
-    log.setLevel(logging.DEBUG)
+    gcmc = logging.getLogger("gcmc")
+    pkg = logging.getLogger("comet")
+    gcmc.setLevel(logging.DEBUG)
+    pkg.setLevel(logging.DEBUG)
 
     # Already configured (e.g. a previous run() in this process) — don't add
-    # duplicate handlers or truncate the existing log.
-    if log.handlers:
-        return log
+    # duplicate handlers or truncate the existing log; just make sure the
+    # package logger shares the existing handlers.
+    if gcmc.handlers:
+        for handler in gcmc.handlers:
+            if handler not in pkg.handlers:
+                pkg.addHandler(handler)
+        return gcmc
 
     # Formatter without timestamps
     formatter = logging.Formatter("%(levelname)s: %(message)s")
@@ -39,15 +51,17 @@ def setup_logging() -> logging.Logger:
     fh = logging.FileHandler("gcmc_run.log", mode="w")
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(formatter)
-    log.addHandler(fh)
 
     # Console handler (INFO+)
     ch = logging.StreamHandler()
     ch.setLevel(logging.INFO)
     ch.setFormatter(formatter)
-    log.addHandler(ch)
 
-    return log
+    for log in (gcmc, pkg):
+        log.addHandler(fh)
+        log.addHandler(ch)
+
+    return gcmc
 
 
 def _fmt_int(value) -> str:
