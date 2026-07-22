@@ -52,8 +52,13 @@ def get_energy_mace(atoms: Atoms, model_dir: Path) -> float:
         logger.error(f"MACE model not found: {model_path}")
         raise FileNotFoundError(model_path)
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    atoms.calc = _get_mace_calculator(model_path, device)
-    energy = atoms.get_potential_energy()
+    calc = _get_mace_calculator(model_path, device)
+    # Query the shared calculator WITHOUT attaching it (`atoms.calc = ...`):
+    # a cached calculator only holds the results of its latest evaluation, so
+    # a lingering `.calc` link on an earlier structure serves up another
+    # structure's arrays (e.g. the extxyz writer reading 34-atom forces off a
+    # 32-atom box after a rejected insertion).
+    energy = float(calc.get_potential_energy(atoms))
     logger.debug("Computed MACE energy: %.6f eV", energy)
     return energy
 

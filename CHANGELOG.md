@@ -5,6 +5,18 @@ All notable changes to COMET are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed
+- **Shared-calculator cross-talk crashed the MC loop at the first rejected
+  move (MACE backend).** Since the calculator cache (v0.3.1, 4ce973f) one
+  MACE calculator instance is attached to every structure it evaluates, but
+  it only holds its *latest* results — after evaluating a trial box, the
+  still-linked current box served up wrong-sized arrays and the extxyz
+  trajectory writer crashed (`could not broadcast (34,) into (32,)`),
+  stopping the loop at step 1. Found by the first GPU run with a MACE
+  foundation model. Two-part fix: the MACE backend queries the shared
+  calculator without attaching it, and `write_extxyz_sequence` writes a
+  calculator-free copy.
+
 ### Changed
 - **No hardcoded surface or gas species.** Molecules are recognized once at
   load time (bond connectivity + composition matching against the templates)
