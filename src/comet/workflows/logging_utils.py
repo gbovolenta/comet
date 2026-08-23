@@ -128,6 +128,18 @@ def setup_logging() -> logging.Logger:
     return gcmc
 
 
+def _fmt_counts(counts: dict) -> str:
+    """Render per-species molecule counts as `H2 15, N2 5` (no dict braces)."""
+    if not counts:
+        return "none"
+    return ", ".join(f"{gas} {int(n)}" for gas, n in counts.items())
+
+
+def _fmt_species_set(species) -> str:
+    """Render a species set as a comma-separated list, or an em dash if empty."""
+    return ", ".join(sorted(species)) if species else "—"
+
+
 def _fmt_int(value) -> str:
     """Format an integer-like value for human-readable log output."""
     return f"{int(value)}"

@@ -12,7 +12,13 @@ All notable changes to COMET are documented here. Format loosely follows
   GCMC SAMPLING, RESTART OUTPUT; per-cycle GCMC/MD sections in
   `comet cycle`). INFO lines are written without the `INFO:` level prefix
   (warnings and errors keep theirs); the file log records INFO and above,
-  omitting per-step DEBUG detail for a clean narrative.
+  omitting per-step DEBUG detail for a clean narrative. Block content was
+  audited for readability: a species table (initial count, N*, integer
+  target, implied pressure, μ_target) replaces the former dict-style lines;
+  duplicate count reports were removed at the source; the insertion region
+  is printed per axis; step and final-state lines are single consolidated
+  lines without Python dict braces; species sets print as plain lists
+  (`Converged: — | Unconverged: H2, N2 | Frozen: —`).
 - **Composition input via integer `ratios` + total `pressure`**:
   ``pressure: 150.0`` with ``ratios: {H2: 3, N2: 1}`` resolves to per-species
   partial pressures (p_i = r_i/Σr·P) at validation time. Integer ratios keep

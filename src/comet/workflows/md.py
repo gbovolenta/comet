@@ -21,7 +21,7 @@ from comet.io.trajectory import write_extxyz_sequence
 from comet.physics.thermo import chemical_potentials_from_particles
 from comet.potentials.backends import EnergyBackend
 from comet.system.molecules import partition_by_molecule
-from comet.workflows.logging_utils import _fmt_energy, logger
+from comet.workflows.logging_utils import _fmt_counts, _fmt_energy, logger
 from comet.workflows.stages import GcmcState
 
 
@@ -134,6 +134,10 @@ def run_md(
     full.calc = None
     box_gas, slab_ads, gas_counts, mol_species, next_mol_id = partition_by_molecule(
         full, float(config.z_cutoff), state.gas_templates_all,
+    )
+    logger.info(
+        "Re-partition after MD: %s in gas box (%d atoms), slab %d atoms",
+        _fmt_counts(gas_counts), len(box_gas), len(slab_ads),
     )
 
     state.box_gas = box_gas

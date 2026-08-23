@@ -16,6 +16,7 @@ import numpy as np
 from comet.config.schema import RunConfig, load_run_config
 from comet.potentials.backends import build_energy_backend
 from comet.workflows.logging_utils import (
+    _fmt_counts,
     log_banner,
     log_section,
     log_settings,
@@ -156,5 +157,5 @@ def cycle(config_path: str) -> int:
 
     log_section("CYCLING COMPLETED")
     logger.info("Finished %d GCMC <-> MD cycles. Final gas counts: %s",
-                n_cycles, state.gas_counts)
+                n_cycles, _fmt_counts(state.gas_counts))
     return 0

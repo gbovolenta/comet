@@ -45,12 +45,12 @@ from comet.potentials.backends import EnergyBackend
 from comet.potentials.templates import load_centered_gas_templates
 from comet.system.molecules import partition_by_molecule
 from comet.workflows.logging_utils import (
+    _fmt_counts,
     _fmt_energy,
     _fmt_int,
-    _fmt_mu_scalar,
     _fmt_prob,
     _fmt_pressure,
-    _format_mu_dict,
+    _fmt_species_set,
     _format_mu_status,
     logger,
 )
@@ -121,9 +121,12 @@ def build_initial_system(config: RunConfig, backend: EnergyBackend) -> Optional[
     )
     gas_count = sum(gas_counts.values())
     logger.info(
-        "Molecule partition at z_cutoff = %.2f Å: %s (gas box: %d atoms, slab: %d atoms)",
-        z_cut, gas_counts, len(box_gas), len(slab_ads),
+        "Gas/slab partition at z_cutoff = %.2f Å: gas box %d atoms (%d molecules), slab %d atoms",
+        z_cut, len(box_gas), gas_count, len(slab_ads),
     )
+    n_spectators = sum(1 for s in mol_species.values() if s is None)
+    if n_spectators:
+        logger.info("Frozen spectator fragments in gas box: %d", n_spectators)
 
     # Initial energy of the gas box.
     try:
@@ -143,8 +146,6 @@ def build_initial_system(config: RunConfig, backend: EnergyBackend) -> Optional[
         y1=config.y1,
         partial_pressures=config.partial_pressures,
     )
-    logger.info("Target chemical potentials: %s", _format_mu_dict(mu_dict))
-
     # Integer convergence targets nearest the ideal-gas expectations; with
     # `ratios` the composition is preserved exactly. Fails (no fallback) when
     # the gas volume cannot accommodate the requested state.
@@ -154,24 +155,27 @@ def build_initial_system(config: RunConfig, backend: EnergyBackend) -> Optional[
     except ValueError as e:
         logger.critical(str(e))
         return None
-    logger.info(
-        "Expected counts N* = pV/kBT (V=%.0f Å³): %s",
-        V,
-        {g: round(n, 2) for g, n in n_star.items()},
-    )
-    logger.info(
-        "Integer convergence targets: %s (implied pressures [atm]: %s)",
-        {g: n for g, n in n_targets.items() if np.isfinite(mu_dict[g])},
-        {g: round(float(compute_pressure_atm(T, V, n)), 2)
-         for g, n in n_targets.items() if np.isfinite(mu_dict[g])},
-    )
 
-    inactive = [g for g, mu in mu_dict.items() if not np.isfinite(mu)]
-    if inactive:
-        logger.info(
-            "Inactive species (μ_target = -inf, no insertion expected): %s",
-            inactive,
-        )
+    logger.info("")
+    logger.info("Gas region: V = %.0f Å³ at T = %.2f K", V, T)
+    logger.info("")
+    header = (f"  {'Species':<10}{'initial':>8}{'N* = pV/kBT':>13}{'target':>8}"
+              f"{'p(target) [atm]':>17}{'μ_target [eV]':>15}")
+    logger.info(header)
+    logger.info("  %s", "-" * (len(header) - 2))
+    for gas in gas_dict:
+        n0 = gas_counts.get(gas, 0)
+        if np.isfinite(mu_dict[gas]):
+            p_t = float(compute_pressure_atm(T, V, n_targets[gas]))
+            logger.info(
+                f"  {gas:<10}{n0:>8}{n_star[gas]:>13.2f}{n_targets[gas]:>8}"
+                f"{p_t:>17.2f}{mu_dict[gas]:>15.3f}"
+            )
+        else:
+            logger.info(
+                f"  {gas:<10}{n0:>8}{'—':>13}{'frozen':>8}{'—':>17}{'—':>15}"
+            )
+    logger.info("")
 
     # NOTE: gas templates are intentionally NOT filtered to active species.
     # Move selection already draws only from the unconverged (active) set via
@@ -184,12 +188,7 @@ def build_initial_system(config: RunConfig, backend: EnergyBackend) -> Optional[
     gas_en_dict = backend.gas_energies(gas_templates_all)
     logger.debug("Gas reference energies [eV]: %s", gas_en_dict)
 
-    logger.info(
-        "Initial gas-molecule count: %s, Initial energy: %s eV",
-        _fmt_int(gas_count),
-        _fmt_energy(E_current),
-    )
-    logger.info("Initial gas counts by species: %s", gas_counts)
+    logger.info("Initial gas-box energy: %s eV", _fmt_energy(E_current))
 
     mu_current = chemical_potentials_from_particles(T, V, gas_counts, gas_dict)
 
@@ -235,11 +234,11 @@ def run_mc_loop(state: GcmcState, config: RunConfig, backend: EnergyBackend) -> 
     n_targets = state.n_targets
 
     inactive, converged, unconverged = count_convergence_status(n_targets, gas_counts, mu_dict)
-    logger.info("Initial μ_current: %s", _format_mu_dict(mu_current))
     if config.log_mu_diagnostics:
         logger.info("μ diagnostics: %s", _format_mu_status(mu_dict, mu_current))
-    logger.info("Converged: %s | Unconverged: %s | Inactive: %s",
-                sorted(converged), sorted(unconverged), sorted(inactive))
+    logger.info("Converged: %s | Unconverged: %s | Frozen: %s",
+                _fmt_species_set(converged), _fmt_species_set(unconverged),
+                _fmt_species_set(inactive))
 
     run_until_converged = config.run_until_converged
     max_steps = int(config.max_steps)
@@ -294,8 +293,6 @@ def run_mc_loop(state: GcmcState, config: RunConfig, backend: EnergyBackend) -> 
                     inactive, converged, unconverged = count_convergence_status(n_targets, gas_counts, mu_dict)
                     if config.log_mu_diagnostics:
                         logger.info("μ diagnostics: %s", _format_mu_status(mu_dict, mu_current))
-                    logger.info("Converged: %s | Unconverged: %s | Inactive: %s",
-                                sorted(converged), sorted(unconverged), sorted(inactive))
                     continue
                 try:
                     del_mol, new_box, move_name, del_id = deletion_mc(box_gas, move_name, mol_species)
@@ -318,16 +315,11 @@ def run_mc_loop(state: GcmcState, config: RunConfig, backend: EnergyBackend) -> 
             prob, delta_E = metropolis_probability(E_current, E_new, T, mass_X, mu_X, ins, V, gas_count, gas_en_X)
 
             logger.info(
-                "Step %d proposal (%s %s): E_current=%s eV, E_new=%s eV, "
-                "delta_E=%s eV, mu_target=%s eV, gas_ref=%s eV, prob=%s",
+                "Step %d proposal (%s %s): ΔE = %s eV | prob = %s",
                 step,
                 "ins" if ins else "del",
                 move_name,
-                _fmt_energy(E_current),
-                _fmt_energy(E_new),
                 _fmt_energy(delta_E),
-                _fmt_mu_scalar(mu_X),
-                _fmt_energy(gas_en_X),
                 _fmt_prob(prob),
             )
 
@@ -350,21 +342,13 @@ def run_mc_loop(state: GcmcState, config: RunConfig, backend: EnergyBackend) -> 
                 gas_count = sum(gas_counts.values())
 
                 p_step = compute_pressure_atm(T, V, gas_count)
-                logger.info("Step %d accepted (%s %s): n_gas=%s, E=%s eV, P=%s atm",
-                            step, "ins" if ins else "del", move_name, _fmt_int(gas_count), _fmt_energy(E_current), _fmt_pressure(p_step))
-                logger.info("Step %d accepted gas counts by species: %s", step, gas_counts)
+                logger.info("Step %d accepted (%s %s): %s | E = %s eV | P = %s atm",
+                            step, "ins" if ins else "del", move_name,
+                            _fmt_counts(gas_counts), _fmt_energy(E_current),
+                            _fmt_pressure(p_step))
             else:
-                p_step = compute_pressure_atm(T, V, gas_count)
-                logger.info(
-                    "Step %d rejected (%s %s): prob=%s, n_gas=%s, E=%s eV, P=%s atm",
-                    step,
-                    "ins" if ins else "del",
-                    move_name,
-                    _fmt_prob(prob),
-                    _fmt_int(gas_count),
-                    _fmt_energy(E_current),
-                    _fmt_pressure(p_step),
-                )
+                logger.info("Step %d rejected (%s %s)", step,
+                            "ins" if ins else "del", move_name)
 
             # Update classification and μ diagnostics every step (accepted or not)
             mu_current = chemical_potentials_from_particles(T, V, gas_counts, gas_dict)
@@ -373,8 +357,9 @@ def run_mc_loop(state: GcmcState, config: RunConfig, backend: EnergyBackend) -> 
                 logger.info("μ diagnostics: %s", _format_mu_status(mu_dict, mu_current))
 
             if step == 1 or step % int(config.log_every) == 0:
-                logger.info("Converged: %s | Unconverged: %s | Inactive: %s",
-                            sorted(converged), sorted(unconverged), sorted(inactive))
+                logger.info("Converged: %s | Unconverged: %s | Frozen: %s",
+                            _fmt_species_set(converged), _fmt_species_set(unconverged),
+                            _fmt_species_set(inactive))
 
             write_extxyz_sequence(output_extxyz, box_gas)
 
@@ -443,14 +428,14 @@ def write_restart(state: GcmcState, config: RunConfig) -> None:
 
     p_fin = compute_pressure_atm(state.T, state.V, state.gas_count)
     logger.info(
-        "Finished GCMC. Final gas molecules count: %s, Final energy: %s eV",
+        "Final state: %s (%s molecules) | E = %s eV | P = %s atm",
+        _fmt_counts(state.gas_counts),
         _fmt_int(state.gas_count),
         _fmt_energy(state.E_current),
+        _fmt_pressure(p_fin),
     )
-    logger.info("Final gas counts by species: %s", state.gas_counts)
     if config.log_mu_diagnostics:
         logger.info("Final μ diagnostics: %s", _format_mu_status(state.mu_dict, state.mu_current))
-
-    logger.info("Finished GCMC. Final pressure: %s atm.", _fmt_pressure(p_fin))
+    logger.info("")
     logger.info("Wrote %s", bdir / "initial.lammpsdata")
     logger.info("Wrote %s", bdir / "mc_cycle.extxyz")

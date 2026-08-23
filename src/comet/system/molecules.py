@@ -198,8 +198,9 @@ def partition_by_molecule(
             gas_counts[species] += 1
 
     n_spectators = sum(1 for s in mol_species.values() if s is None)
-    logger.info("Gas counts by species: %s", gas_counts)
-    logger.info(
+    # Summary lines live with the callers (stages/md); keep DEBUG detail here.
+    logger.debug("Gas counts by species: %s", gas_counts)
+    logger.debug(
         "Total gas molecule count: %d (+ %d frozen spectator fragment(s))",
         sum(gas_counts.values()),
         n_spectators,
