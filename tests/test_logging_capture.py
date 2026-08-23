@@ -93,3 +93,31 @@ def test_banner_contains_author_and_version_no_quote(tmp_path, monkeypatch):
     assert "Giulia M. Bovolenta" in text
     assert "GCMC pressure control" in text
     assert '"' not in text   # no quotation block
+
+
+def test_species_status_lines_use_check_and_bold_dash(tmp_path, monkeypatch):
+    import numpy as np
+    from comet.workflows.logging_utils import log_species_status
+
+    _reset_handlers()
+    monkeypatch.chdir(tmp_path)
+    try:
+        setup_logging()
+        log_species_status(
+            n_targets={"H2": 12, "N2": 4, "CO2": 0},
+            gas_counts={"H2": 12, "N2": 6, "CO2": 1},
+            mu_target={"H2": -0.8, "N2": -1.1, "CO2": -np.inf},
+            mu_current={"H2": -0.81, "N2": -1.0, "CO2": -0.5},
+            show_mu=True,
+        )
+        for handler in logging.getLogger("gcmc").handlers:
+            handler.flush()
+        text = (tmp_path / "gcmc_run.log").read_text()
+    finally:
+        _reset_handlers()
+
+    lines = {l.strip().split(":")[0]: l for l in text.splitlines() if l.strip()}
+    assert lines["H2"].endswith("✔") and "N = 12/12" in lines["H2"]
+    assert lines["N2"].endswith("━") and "N = 6/4" in lines["N2"]
+    assert "Δμ" in lines["H2"]
+    assert lines["CO2"].strip() == "CO2: frozen"

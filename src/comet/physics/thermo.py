@@ -33,6 +33,20 @@ def pressure_to_eV_per_A3(P: float, unit: str = "Pa") -> float:
     raise ValueError(f"Unsupported pressure unit: {unit!r}")
 
 
+def pressure_atm_to_unit(p_atm: float, unit: str) -> float:
+    """Convert a pressure from atm to the requested unit ("Pa", "bar", "atm", "torr")."""
+    u = unit.lower()
+    if u == "atm":
+        return p_atm
+    if u == "pa":
+        return p_atm * atm_to_Pa
+    if u == "bar":
+        return p_atm * atm_to_Pa / 1e5
+    if u == "torr":
+        return p_atm * 760.0
+    raise ValueError(f"Unsupported pressure unit: {unit!r}")
+
+
 def lambda_wl(T: float, m_amu: float) -> float:
     """
     Calculate the thermal de Broglie wavelength for a particle.

@@ -128,6 +128,42 @@ def setup_logging() -> logging.Logger:
     return gcmc
 
 
+_MARK_OK = "✔"
+_MARK_NOT = "━"   # bold em dash: not converged
+
+
+def log_species_status(
+    n_targets: dict,
+    gas_counts: dict,
+    mu_target: dict,
+    mu_current: dict,
+    show_mu: bool = False,
+) -> None:
+    """Write one status line per species, ending in ✔ (at target) or ━ (not).
+
+    Frozen species (non-finite μ target) are reported as such without a mark.
+    With ``show_mu``, the target/current chemical potentials and Δμ are
+    appended before the mark.
+    """
+    for gas, mu_t in mu_target.items():
+        if not np.isfinite(mu_t):
+            logger.info("  %s: frozen", gas)
+            continue
+        n = int(gas_counts.get(gas, 0))
+        target = int(n_targets.get(gas, 0))
+        mark = _MARK_OK if n == target else _MARK_NOT
+        if show_mu:
+            mu_c = mu_current.get(gas, float("nan"))
+            mu_desc = (
+                f" | μ = {mu_c:.3f} eV (target {mu_t:.3f}, Δμ {mu_t - mu_c:+.3f})"
+                if np.isfinite(mu_c)
+                else " | μ = no molecules"
+            )
+        else:
+            mu_desc = ""
+        logger.info("  %s: N = %d/%d%s  %s", gas, n, target, mu_desc, mark)
+
+
 def _fmt_counts(counts: dict) -> str:
     """Render per-species molecule counts as `H2 15, N2 5` (no dict braces)."""
     if not counts:

@@ -23,7 +23,13 @@ from comet.workflows.logging_utils import (
     logger,
     setup_logging,
 )
-from comet.workflows.stages import build_initial_system, run_mc_loop, write_restart
+from comet.workflows.stages import (
+    build_initial_system,
+    log_convergence_verdict,
+    log_pressure_summary,
+    run_mc_loop,
+    write_restart,
+)
 
 __all__ = ["cycle", "run", "setup_logging"]
 
@@ -158,4 +164,6 @@ def cycle(config_path: str) -> int:
     log_section("CYCLING COMPLETED")
     logger.info("Finished %d GCMC <-> MD cycles. Final gas counts: %s",
                 n_cycles, _fmt_counts(state.gas_counts))
+    log_convergence_verdict(state)
+    log_pressure_summary(state, config)
     return 0

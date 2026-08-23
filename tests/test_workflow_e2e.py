@@ -140,6 +140,11 @@ def test_run_orchestration_with_stub_backend(tmp_path, monkeypatch):
     assert (tmp_path / "out" / "initial.lammpsdata").exists()
     assert (tmp_path / "out" / "mc_cycle.extxyz").exists()
 
+    # The final block states the convergence verdict explicitly: 2 steps
+    # cannot bring 16 H2 to the target of 12, so the warning form appears.
+    log_text = (tmp_path / "gcmc_run.log").read_text()
+    assert "Species not at their target counts: H2" in log_text
+
 
 def test_build_energy_backend_orca_constructs(tmp_path):
     """build_energy_backend returns a usable ORCA backend without running ORCA."""

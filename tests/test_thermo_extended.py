@@ -215,3 +215,14 @@ def test_count_convergence_status_classifies_by_integer_count():
     assert unconverged == {"N2"}
 
 
+
+
+def test_pressure_atm_to_unit_conversions():
+    from comet.physics.thermo import pressure_atm_to_unit
+
+    assert pressure_atm_to_unit(1.0, "atm") == pytest.approx(1.0)
+    assert pressure_atm_to_unit(1.0, "Pa") == pytest.approx(101325.0)
+    assert pressure_atm_to_unit(1.0, "bar") == pytest.approx(1.01325)
+    assert pressure_atm_to_unit(1.0, "torr") == pytest.approx(760.0)
+    with pytest.raises(ValueError):
+        pressure_atm_to_unit(1.0, "psi")
