@@ -39,9 +39,11 @@ or adjust the variables in `submit_slurm.sh` and `sbatch` it.
 | Binary H2/N2 | `config_h2_n2.yaml` | `input_h2_n2.lammps` | `seeds/fe_slab_h2_n2.lammps` (400 Fe + 16 H2 + 6 N2) |
 
 The binary variant drives each species to its own partial pressure, specified
-as a total `pressure` split by `mole_fractions` (absolute `partial_pressures`
-are also accepted). Atom-type order is defined by `elements` in the config
-and must match the seed file and the `pair_coeff` type indices in the MD input.
+as a total `pressure` split by integer composition `ratios` (absolute
+`partial_pressures` are also accepted). Convergence targets are the integer
+molecule counts nearest pV/kBT that preserve the ratio exactly. Atom-type
+order is defined by `elements` in the config and must match the seed file and
+the `pair_coeff` type indices in the MD input.
 
 **Ternary+ mixtures (e.g. H2/N2/NH3):** the GCMC half handles any number of
 species and any molecular formula (see `tests/test_mixture_workflow.py` for a

@@ -80,7 +80,7 @@ gas_template_dir: {templates}
 z_cutoff: {Z_CUTOFF}
 temperature: 400.0
 partial_pressures:
-  CH3OH: 1.0
+  CH3OH: 40.0
 pressure_unit: bar
 steps: 4
 seed: 7

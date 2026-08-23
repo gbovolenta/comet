@@ -13,10 +13,11 @@ from comet.physics.thermo import (
     chemical_potentials_from_particles,
     compute_chemical_potentials,
     compute_pressure_atm,
+    count_convergence_status,
     load_gas_masses,
-    mu_convergence_status,
-    mu_converged,
     pressure_to_eV_per_A3,
+    quantized_target_counts,
+    target_counts_from_mu,
 )
 
 
@@ -139,28 +140,78 @@ def test_load_gas_masses_validates_parallel_lists():
         load_gas_masses(["H2"], [2.0, 28.0])
 
 
-def test_mu_convergence_status_and_wrapper():
-    inactive, converged, unconverged = mu_convergence_status(
-        mu_target={"H2": 1.0, "N2": -np.inf, "CO2": 0.5},
-        mu_current={"H2": 1.01, "N2": 99.0, "CO2": np.inf},
-        tol=0.05,
-    )
+def test_target_counts_from_mu_roundtrips_pressure():
+    from comet.physics.constants import atm_to_Pa, kB_J
 
-    assert inactive == {"N2"}
+    T, V_A3, m_amu, p_atm = 723.0, 11650.0, 2.016, 100.0
+    mu = chemical_potential_pure(T, m_amu, p_atm, "atm")
+    targets = target_counts_from_mu(T, V_A3, {"H2": mu}, {"H2": m_amu})
+
+    # Analytic ideal-gas count: N* = p V / (kB T)
+    expected = (p_atm * atm_to_Pa) * (V_A3 * 1e-30) / (kB_J * T)
+    assert targets["H2"] == pytest.approx(expected, rel=1e-6)
+
+
+def _mu_for(T, masses, pressures_atm):
+    return {
+        g: chemical_potential_pure(T, masses[g], p, "atm")
+        for g, p in pressures_atm.items()
+    }
+
+
+def test_quantized_targets_preserve_ratio_on_lattice():
+    # 3:1 at conditions where N* = (13.3, 4.4): total 17.7 -> nearest multiple
+    # of 4 is 16 -> exact 12:4 split.
+    T, V = 723.0, 11649.0
+    masses = {"H2": 2.016, "N2": 28.014}
+    mu = _mu_for(T, masses, {"H2": 112.5, "N2": 37.5})
+    targets = quantized_target_counts(T, V, mu, masses, ratios={"H2": 3, "N2": 1})
+    assert targets == {"H2": 12, "N2": 4}
+
+
+def test_quantized_targets_fail_below_one_composition_unit():
+    # Same composition at 1/100th the pressure: N*_tot << one unit of 4.
+    T, V = 723.0, 11649.0
+    masses = {"H2": 2.016, "N2": 28.014}
+    mu = _mu_for(T, masses, {"H2": 1.125, "N2": 0.375})
+    with pytest.raises(ValueError, match="Increase the gas volume"):
+        quantized_target_counts(T, V, mu, masses, ratios={"H2": 3, "N2": 1})
+
+
+def test_quantized_targets_partial_pressure_mode_rounds_independently():
+    T, V = 723.0, 11649.0
+    masses = {"H2": 2.016, "N2": 28.014}
+    mu = _mu_for(T, masses, {"H2": 112.5, "N2": 37.5})
+    targets = quantized_target_counts(T, V, mu, masses, ratios=None)
+    assert targets == {"H2": 13, "N2": 4}   # round(13.3), round(4.4)
+
+
+def test_quantized_targets_partial_pressure_mode_fails_on_zero_target():
+    T, V = 723.0, 11649.0
+    masses = {"H2": 2.016}
+    mu = _mu_for(T, masses, {"H2": 1.0})    # N* ~ 0.12
+    with pytest.raises(ValueError, match="rounds to zero"):
+        quantized_target_counts(T, V, mu, masses, ratios=None)
+
+
+def test_quantized_targets_inactive_species_zero():
+    T, V = 723.0, 11649.0
+    masses = {"H2": 2.016, "N2": 28.014}
+    mu = _mu_for(T, masses, {"H2": 112.5})
+    mu["N2"] = -np.inf
+    targets = quantized_target_counts(T, V, mu, masses, ratios={"H2": 1})
+    assert targets["N2"] == 0
+    assert targets["H2"] >= 1
+
+
+def test_count_convergence_status_classifies_by_integer_count():
+    inactive, converged, unconverged = count_convergence_status(
+        n_targets={"H2": 12, "N2": 4, "CO2": 0},
+        gas_counts={"H2": 12, "N2": 6, "CO2": 3},
+        mu_target={"H2": -0.8, "N2": -1.1, "CO2": -np.inf},
+    )
+    assert inactive == {"CO2"}
     assert converged == {"H2"}
-    assert unconverged == {"CO2"}
-    assert not mu_converged(
-        mu_target={"H2": 1.0, "N2": -np.inf, "CO2": 0.5},
-        mu_current={"H2": 1.01, "N2": 99.0, "CO2": np.inf},
-        tol=0.05,
-    )
-
-
-def test_mu_convergence_status_validates_inputs():
-    with pytest.raises(TypeError):
-        mu_convergence_status([], {}, 0.1)
-
-    with pytest.raises(KeyError):
-        mu_convergence_status({"H2": 1.0}, {}, 0.1)
+    assert unconverged == {"N2"}
 
 

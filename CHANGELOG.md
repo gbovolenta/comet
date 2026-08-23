@@ -6,16 +6,37 @@ All notable changes to COMET are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
-- **`mole_fractions` + total `pressure` is now the primary μ input**:
-  ``pressure: 10.0`` with ``mole_fractions: {H2: 0.75, N2: 0.25}`` resolves to
-  per-species partial pressures (p_i = y_i·P) at validation time. Omitted
-  species stay frozen; fractions must each lie in (0, 1] and sum to ≤ 1
-  (below 1 is allowed — the remainder is simply not simulated). Mutually
-  exclusive with `partial_pressures`, which remains accepted as the
-  absolute-pressure alternative. All examples converted; this also removes
-  the ambiguity of the old mixture example, whose partial pressures
-  (0.75/0.25 bar) read like fractions. The legacy binary `y1` fallback is
-  kept for old configs but superseded.
+- **Composition input via integer `ratios` + total `pressure`**:
+  ``pressure: 150.0`` with ``ratios: {H2: 3, N2: 1}`` resolves to per-species
+  partial pressures (p_i = r_i/Σr·P) at validation time. Integer ratios keep
+  the composition exactly representable by integer molecule counts (a decimal
+  such as 0.3333 is not 1/3, so mole fractions were rejected as the input
+  form). Omitted species stay frozen. Mutually exclusive with
+  `partial_pressures`, which remains accepted as the absolute-pressure
+  alternative (no composition claim). All examples converted.
+
+### Changed
+- **Convergence is now judged on integer molecule counts, not a μ tolerance.**
+  At startup, integer per-species targets are computed as the counts nearest
+  the ideal-gas expectations N* = pV/kBT: with `ratios`, the total is
+  quantized to the nearest multiple of Σr and split exactly (composition
+  preserved by construction); with `partial_pressures`, each species is
+  rounded independently. A species is converged when its current count equals
+  its target; the loop terminates when all active species are simultaneously
+  at target. This replaces the fixed 1 meV μ tolerance, which was unreachable
+  at small N (adjacent integer occupations differ by kBT/N > tolerance).
+  Metropolis acceptance still uses the exact μ targets, so the sampled
+  ensemble is unchanged. Biased moves now take their direction
+  deterministically from sign(N_target − N) and weight species by |ΔN|
+  (`force_dmu_threshold` is retained in the config but unused). The expected
+  counts N*, the integer targets, and their implied pressures are logged at
+  startup.
+- **No fallback for unrepresentable states**: if the expected counts round
+  below one composition unit (ratios mode) or an active species' target
+  rounds to zero (partial-pressure mode), the run fails with the minimum
+  factor by which the gas volume or pressure must be increased. The bundled
+  example box at 1 bar targets ~0.1 molecules, so the example configs moved
+  to production-like high-pressure conditions (120–150 atm).
 - **`comet cycle` — built-in GCMC↔MD alternation via ASE MD (no LAMMPS
   needed).** With an `md:` config block, comet alternates the GCMC loop with
   ASE dynamics on slab+gas using the same cached MACE calculator for both

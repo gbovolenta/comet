@@ -46,6 +46,7 @@ python -m comet --help
 
 An example configuration is provided at `examples/config.yaml`, loaded with `yaml.safe_load`.
 The energy backend is selected with `energy_backend` (`mace` or `orca`). Pressure control is
-set with a total `pressure` split by per-species `mole_fractions` (omit a species to freeze it);
-absolute per-species `partial_pressures` are also accepted. The GCMC insertion region is derived from the restart
-file and `z_cutoff`.
+set with a total `pressure` split by integer composition `ratios` (omit a species to freeze it);
+absolute per-species `partial_pressures` are also accepted. Convergence is judged against the
+integer molecule counts nearest pV/kBT that preserve the composition exactly. The GCMC insertion
+region is derived from the restart file and `z_cutoff`.

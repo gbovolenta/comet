@@ -71,7 +71,7 @@ gas_template_dir: {templates}
 z_cutoff: {Z_CUTOFF}
 temperature: 300.0
 partial_pressures:
-  H2: 1.0
+  H2: 40.0
 pressure_unit: bar
 steps: 3
 seed: 5

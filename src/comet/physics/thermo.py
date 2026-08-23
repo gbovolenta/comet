@@ -289,58 +289,125 @@ def compute_chemical_potentials(
             f"Chemical potentials for {ngas}-component mixtures not implemented"
         )
 
-def mu_converged(mu_target: dict, mu_current: dict, tol: float) -> bool:
-    """Return whether every active species satisfies the μ tolerance.
+def target_counts_from_mu(
+    T: float,
+    V_A3: float,
+    mu_dict: Dict[str, float],
+    gas_masses: Dict[str, float],
+) -> Dict[str, float]:
+    """
+    Ideal-gas expected molecule counts implied by the target chemical potentials.
 
-    Args:
-        mu_target: Mapping from species name to target chemical potential.
-        mu_current: Mapping from species name to current chemical potential.
-        tol: Absolute convergence tolerance in eV.
+    Inverts μ = kB T ln(N λ³ / V): N* = (V / λ³) · exp(μ / kB T), which equals
+    p_i·V/(kB T) regardless of how the pressures were specified. Inactive
+    species (μ = -inf) map to 0.
 
     Returns:
-        bool: `True` when no active species remain unconverged.
+        Dict {gas_name: N*_i} (float; the grand-canonical ensemble average).
     """
-    _, _, unconverged = mu_convergence_status(mu_target, mu_current, tol)
-    return len(unconverged) == 0
+    if V_A3 <= 0:
+        raise ValueError("V_A3 must be > 0")
+
+    targets: Dict[str, float] = {}
+    for gas, mu in mu_dict.items():
+        if not np.isfinite(mu):
+            targets[gas] = 0.0
+            continue
+        if gas not in gas_masses:
+            raise KeyError(f"Missing mass for gas '{gas}'")
+        lam = lambda_wl(T, gas_masses[gas])
+        targets[gas] = float((V_A3 / lam**3) * np.exp(mu / (kB_eV * T)))
+    return targets
 
 
-def mu_convergence_status(
+def quantized_target_counts(
+    T: float,
+    V_A3: float,
+    mu_dict: Dict[str, float],
+    gas_masses: Dict[str, float],
+    ratios: Dict[str, int] | None = None,
+) -> Dict[str, int]:
+    """
+    Integer per-species convergence targets nearest the ideal-gas expectations.
+
+    With ``ratios`` (integer composition), the total count is quantized to the
+    nearest multiple of Σr and split exactly as r_i : ... — the composition is
+    preserved by construction. Without ratios (absolute partial pressures),
+    each active species is rounded independently; no composition constraint is
+    claimed.
+
+    There is deliberately no fallback: if the gas volume cannot accommodate the
+    requested state (total quantizes to zero, or an active species' target
+    rounds to zero), a ValueError is raised stating the minimum factor by which
+    the gas volume or the pressure must be increased.
+
+    Returns:
+        Dict {gas_name: integer target}; inactive species map to 0.
+    """
+    n_star = target_counts_from_mu(T, V_A3, mu_dict, gas_masses)
+    active = [g for g, mu in mu_dict.items() if np.isfinite(mu)]
+    targets: Dict[str, int] = {g: 0 for g in mu_dict}
+    if not active:
+        return targets
+
+    if ratios is not None:
+        missing = [g for g in active if g not in ratios]
+        if missing:
+            raise ValueError(f"ratios missing active species: {sorted(missing)}")
+        r_sum = sum(int(ratios[g]) for g in active)
+        n_star_tot = sum(n_star[g] for g in active)
+        units = round(n_star_tot / r_sum)
+        if units < 1:
+            factor = np.inf if n_star_tot <= 0 else r_sum / n_star_tot
+            raise ValueError(
+                f"Expected counts N* = { {g: round(n_star[g], 2) for g in active} } "
+                f"sum to {n_star_tot:.2f}, below one composition unit "
+                f"({r_sum} molecules for ratios "
+                f"{':'.join(str(ratios[g]) for g in active)}). Increase the gas "
+                f"volume or the total pressure by a factor >= {factor:.1f}."
+            )
+        for g in active:
+            targets[g] = int(ratios[g]) * int(units)
+        return targets
+
+    for g in active:
+        t = round(n_star[g])
+        if t < 1:
+            raise ValueError(
+                f"Expected count N*({g}) = {n_star[g]:.3f} rounds to zero at the "
+                f"requested partial pressure. Increase the gas volume or the "
+                f"partial pressure of {g} by a factor >= {0.5 / n_star[g]:.1f}."
+            )
+        targets[g] = int(t)
+    return targets
+
+
+def count_convergence_status(
+    n_targets: Dict[str, int],
+    gas_counts: Dict[str, int],
     mu_target: Dict[str, float],
-    mu_current: Dict[str, float],
-    tol: float,
 ) -> Tuple[Set[str], Set[str], Set[str]]:
     """
-    Classify species as (inactive, converged, unconverged).
+    Classify species as (inactive, converged, unconverged) by integer count.
 
     Rules:
-      - inactive: mu_target is non-finite (e.g. -inf) => ignore from convergence
-      - converged: finite target & finite current & |Δμ| <= tol
-      - unconverged: finite target but (current non-finite OR |Δμ| > tol)
+      - inactive: mu_target is non-finite (frozen species)
+      - converged: current molecule count equals the integer target
+      - unconverged: otherwise
 
     Returns:
       (inactive, converged, unconverged)
     """
-    if not isinstance(mu_target, dict) or not isinstance(mu_current, dict):
-        raise TypeError(
-            f"mu_convergence_status expects dicts; got {type(mu_target)}, {type(mu_current)}"
-        )
-
     inactive: Set[str] = set()
     converged: Set[str] = set()
     unconverged: Set[str] = set()
 
     for gas, mu_t in mu_target.items():
-        if gas not in mu_current:
-            raise KeyError(f"Missing mu_current for species '{gas}'")
-
         if not np.isfinite(mu_t):
             inactive.add(gas)
-            continue
-
-        mu_c = mu_current[gas]
-        if (not np.isfinite(mu_c)) or (abs(mu_t - mu_c) > tol):
-            unconverged.add(gas)
-        else:
+        elif int(gas_counts.get(gas, 0)) == int(n_targets.get(gas, 0)):
             converged.add(gas)
+        else:
+            unconverged.add(gas)
 
     return inactive, converged, unconverged

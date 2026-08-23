@@ -52,8 +52,8 @@ gas_list: [H2]
 gas_template_dir: {templates}
 z_cutoff: 15.14698231002696
 temperature: 823.0
-pressure: 1.0
-pressure_unit: bar
+pressure: 120.0
+pressure_unit: atm
 gas_masses: [2.01568]
 steps: 2
 """
@@ -109,8 +109,8 @@ gas_list: [H2]
 gas_template_dir: {templates}
 z_cutoff: 15.0
 temperature: 823.0
-pressure: 1.0
-pressure_unit: bar
+pressure: 120.0
+pressure_unit: atm
 gas_masses: [2.01568]
 steps: 1
 """
@@ -176,8 +176,8 @@ gas_list: [H2]
 gas_template_dir: {templates}
 z_cutoff: 15.14698231002696
 temperature: 823.0
-pressure: 1.0
-pressure_unit: bar
+pressure: 120.0
+pressure_unit: atm
 gas_masses: [2.01568]
 steps: 5
 seed: 123

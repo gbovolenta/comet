@@ -78,7 +78,7 @@ def _write_fixture(tmp_path: Path, gas_list, molecules) -> Path:
     for name in gas_list:
         ase_write(templates / f"{name}.xyz", MOLS[name])
 
-    pressures = "\n".join(f"  {name}: 1.0" for name in gas_list)
+    pressures = "\n".join(f"  {name}: 40.0" for name in gas_list)
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         f"""

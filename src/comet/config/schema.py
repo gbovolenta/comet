@@ -64,10 +64,12 @@ class RunConfig(BaseModel):
     temperature: float
 
     # --- pressure / chemical potential ---
-    # Preferred input: total `pressure` + per-species `mole_fractions`
-    # (p_i = y_i * pressure). `partial_pressures` remains accepted as the
-    # absolute-pressure alternative; fractions resolve into it at validation.
-    mole_fractions: Optional[Dict[str, float]] = None
+    # Preferred input: total `pressure` + integer composition `ratios`
+    # (e.g. {H2: 3, N2: 1}; p_i = r_i/Σr · pressure). Integer ratios make the
+    # composition exactly representable by integer molecule counts, which the
+    # count-based convergence targets require. `partial_pressures` remains
+    # accepted as the absolute-pressure alternative (no composition claim).
+    ratios: Optional[Dict[str, int]] = None
     partial_pressures: Optional[Dict[str, float]] = None
     pressure: Optional[float] = None
     pressure_unit: PressureUnit = "bar"
@@ -84,6 +86,8 @@ class RunConfig(BaseModel):
     biased_moves: bool = False
     log_mu_diagnostics: bool = False
     log_every: int = 1
+    # Unused since count-based convergence targets (direction is deterministic
+    # from ΔN); retained so existing configs remain valid.
     force_dmu_threshold: float = 0.0
     force_single_species: bool = True
 
@@ -124,30 +128,27 @@ class RunConfig(BaseModel):
         if self.slab is not None and self.slab not in self.elements:
             raise ValueError(f"slab {self.slab!r} must be one of elements {self.elements}")
 
-        if self.mole_fractions is not None:
+        if self.ratios is not None:
             if self.partial_pressures is not None:
                 raise ValueError(
-                    "provide either 'mole_fractions' or 'partial_pressures', not both"
+                    "provide either 'ratios' or 'partial_pressures', not both"
                 )
             if self.pressure is None:
-                raise ValueError("'mole_fractions' requires a total 'pressure'")
-            unknown = set(self.mole_fractions) - set(self.gas_list)
+                raise ValueError("'ratios' requires a total 'pressure'")
+            unknown = set(self.ratios) - set(self.gas_list)
             if unknown:
                 raise ValueError(
-                    f"mole_fractions has species not in gas_list: {sorted(unknown)}"
+                    f"ratios has species not in gas_list: {sorted(unknown)}"
                 )
-            for gas, y in self.mole_fractions.items():
-                if not 0.0 < y <= 1.0:
-                    raise ValueError(
-                        f"mole_fractions[{gas}] = {y} must be in (0, 1]"
-                    )
-            total = sum(self.mole_fractions.values())
-            if total > 1.0 + 1e-9:
-                raise ValueError(f"mole_fractions sum to {total:.6f} > 1")
-            # Resolve to absolute partial pressures; a species omitted from
-            # mole_fractions stays frozen, same as with partial_pressures.
+            for gas, r in self.ratios.items():
+                if r < 1:
+                    raise ValueError(f"ratios[{gas}] = {r} must be a positive integer")
+            # Resolve to absolute partial pressures (p_i = r_i/Σr · P); a
+            # species omitted from ratios stays frozen, same as with
+            # partial_pressures.
+            r_sum = sum(self.ratios.values())
             self.partial_pressures = {
-                gas: y * self.pressure for gas, y in self.mole_fractions.items()
+                gas: (r / r_sum) * self.pressure for gas, r in self.ratios.items()
             }
 
         if self.partial_pressures is not None:
@@ -158,7 +159,7 @@ class RunConfig(BaseModel):
                 )
         elif self.pressure is None:
             raise ValueError(
-                "provide 'pressure' + 'mole_fractions' (or 'partial_pressures') "
+                "provide 'pressure' + 'ratios' (or 'partial_pressures') "
                 "to set chemical-potential targets"
             )
 

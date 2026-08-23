@@ -34,20 +34,26 @@ z_cutoff: 15.14698231002696          # Z cutoff (Å): molecules whose center of 
                                      # never split at the boundary)
 temperature: 823.0                   # Simulation temperature [K]
 
-# Preferred μ input: total pressure + per-species mole fractions
-# (p_i = y_i * pressure). Each listed species is pressure-controlled toward its
-# own partial pressure. Omit a species to FREEZE it: it stays in the box and
-# affects the energy/overlap, but is never inserted or deleted (still counted
-# and logged). Fractions must sum to <= 1.
-pressure: 1.0                        # Total pressure
-mole_fractions:
-  H2: 1.0
-pressure_unit: bar                   # Unit for pressure: "Pa", "bar", "atm", or "torr"
+# Preferred μ input: total pressure + integer composition ratios
+# (p_i = r_i/Σr * pressure). Integer ratios keep the composition exactly
+# representable by integer molecule counts: the convergence targets are the
+# nearest integers preserving the ratio (e.g. 3:1 -> multiples of 4).
+# Omit a species to FREEZE it: it stays in the box and affects the
+# energy/overlap, but is never inserted or deleted (still counted and logged).
+# NOTE: the requested state must fit the gas volume — if the expected count
+# pV/kBT rounds below one composition unit, the run fails with the required
+# volume/pressure factor (no fallback). For the bundled box this needs
+# high-pressure conditions; 1 bar would target < 1 molecule.
+pressure: 150.0                      # Total pressure
+ratios:
+  H2: 1
+pressure_unit: atm                   # Unit for pressure: "Pa", "bar", "atm", or "torr"
 
 # Alternative: absolute per-species partial pressures (in pressure_unit; these
-# are PRESSURES, not fractions) instead of pressure + mole_fractions:
+# are PRESSURES, not fractions). Targets are then rounded per species
+# independently — no composition constraint is claimed:
 # partial_pressures:
-#   H2: 1.0
+#   H2: 150.0
 
 steps: 1000                          # Number of Monte Carlo steps
 
@@ -80,11 +86,11 @@ steps: 1000                          # Number of Monte Carlo steps
 # elements: [Cu, C, O, H]            # type order must match your LAMMPS data file
 # gas_list: [CH3OH, H2]
 # gas_template_dir: path/to/templates/   # must contain CH3OH.xyz and H2.xyz
-# pressure: 10.0                     # 10 bar total: 7.5 bar CH3OH + 2.5 bar H2
-# mole_fractions:
-#   CH3OH: 0.75
-#   H2: 0.25
-# pressure_unit: bar
+# pressure: 200.0                    # total; 3:1 -> 150 atm CH3OH + 50 atm H2
+# ratios:
+#   CH3OH: 3
+#   H2: 1
+# pressure_unit: atm
 
 # --- ORCA backend settings (only when energy_backend: orca) -------------------
 # orca_method: PBE

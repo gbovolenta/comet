@@ -216,22 +216,22 @@ def choose_unbiased_move(
 
 
 def choose_biased_move(
-    mu_target: dict[str, float],
-    mu_current: dict[str, float],
-    unconverged: set[str],
+    n_targets: dict[str, int],
     gas_counts: dict[str, int],
-    force_dmu_threshold: float = 0.0,
+    unconverged: set[str],
     force_single_species: bool = True,
 ) -> tuple[str | None, bool | None]:
-    """Choose a species and move direction using chemical-potential mismatch.
+    """Choose a species and move direction from the integer-count mismatch.
+
+    The move direction is deterministic: with ΔN = target − current, insert
+    when ΔN > 0 and delete when ΔN < 0 (a species with ΔN = 0 is converged
+    and therefore not in ``unconverged``). Species selection is weighted by
+    |ΔN|, so the species farthest from its target is corrected preferentially.
 
     Args:
-        mu_target: Mapping from species name to target chemical potential.
-        mu_current: Mapping from species name to current chemical potential.
-        unconverged: Iterable of species names still outside the μ tolerance.
+        n_targets: Mapping from species name to integer target count.
         gas_counts: Mapping from species name to current molecule count.
-        force_dmu_threshold: Threshold above which the move direction is forced
-            by the sign of `Δμ`.
+        unconverged: Species whose current count differs from the target.
         force_single_species: When `True`, a single unconverged species is
             always chosen directly.
 
@@ -243,58 +243,15 @@ def choose_biased_move(
     if not gases_all:
         return None, None
 
-    # If only one species remains and you want to push it, always pick it.
+    dn = {g: int(n_targets.get(g, 0)) - int(gas_counts.get(g, 0)) for g in gases_all}
+
     if force_single_species and len(gases_all) == 1:
         g = gases_all[0]
-        if gas_counts.get(g, 0) == 0:
-            return g, True
-        current = mu_current[g]
-        target = mu_target[g]
-        if not np.isfinite(current):
-            return g, True
-        dmu = float(target - current)
-        if np.isfinite(dmu) and abs(dmu) >= float(force_dmu_threshold):
-            return g, (dmu > 0.0)
-        return g, (random.random() < 0.5)
+        return g, dn[g] > 0
 
-    # Species absent from the current gas box should be inserted first.
-    force_insert = [
-        g for g in gases_all
-        if np.isfinite(mu_target[g]) and not np.isfinite(mu_current[g])
-    ]
-    if force_insert:
-        g = random.choice(force_insert)
-        return g, True
-
-    # Choose species stochastically, weighted by |Δμ|.
-    dmu_map = {}
-    for g in gases_all:
-        dmu_map[g] = float(mu_target[g] - mu_current[g])
-
-    finite_gases = [g for g in gases_all if np.isfinite(dmu_map[g])]
-    if not finite_gases:
+    weights = [abs(dn[g]) for g in gases_all]
+    if sum(weights) <= 0:  # defensive: ΔN = 0 species should not be unconverged
         g = random.choice(gases_all)
-        if gas_counts.get(g, 0) == 0:
-            return g, True
-        return g, (random.random() < 0.5)
-
-    w = np.array([abs(dmu_map[g]) for g in finite_gases], dtype=float)
-    wsum = float(w.sum())
-    if (not np.isfinite(wsum)) or wsum <= 0.0:
-        g = random.choice(finite_gases)
-    else:
-        w = w / wsum
-        g = random.choices(finite_gases, weights=w.tolist(), k=1)[0]
-
-    dmu = dmu_map[g]
-
-    # If the chosen species is absent, insertion is the only valid move.
-    if gas_counts.get(g, 0) == 0:
-        return g, True
-
-    # Deterministic direction when the chemical-potential mismatch is large enough.
-    if abs(dmu) >= float(force_dmu_threshold):
-        return g, (dmu > 0.0)
-
-    # Otherwise fall back to an unbiased direction for the selected species.
-    return g, (random.random() < 0.5)
+        return g, gas_counts.get(g, 0) == 0
+    g = random.choices(gases_all, weights=weights, k=1)[0]
+    return g, dn[g] > 0
