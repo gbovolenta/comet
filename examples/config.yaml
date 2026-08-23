@@ -34,13 +34,20 @@ z_cutoff: 15.14698231002696          # Z cutoff (Å): molecules whose center of 
                                      # never split at the boundary)
 temperature: 823.0                   # Simulation temperature [K]
 
-# Preferred μ input: per-species partial pressures. Each listed species is
-# pressure-controlled toward its own partial pressure. Omit a species (or set it
-# to 0) to FREEZE it: it stays in the box and affects the energy/overlap, but is
-# never inserted or deleted and is still counted and logged.
-partial_pressures:
+# Preferred μ input: total pressure + per-species mole fractions
+# (p_i = y_i * pressure). Each listed species is pressure-controlled toward its
+# own partial pressure. Omit a species to FREEZE it: it stays in the box and
+# affects the energy/overlap, but is never inserted or deleted (still counted
+# and logged). Fractions must sum to <= 1.
+pressure: 1.0                        # Total pressure
+mole_fractions:
   H2: 1.0
-pressure_unit: bar                   # Unit for pressures: "Pa", "bar", "atm", or "torr"
+pressure_unit: bar                   # Unit for pressure: "Pa", "bar", "atm", or "torr"
+
+# Alternative: absolute per-species partial pressures (in pressure_unit; these
+# are PRESSURES, not fractions) instead of pressure + mole_fractions:
+# partial_pressures:
+#   H2: 1.0
 
 steps: 1000                          # Number of Monte Carlo steps
 
@@ -61,13 +68,11 @@ steps: 1000                          # Number of Monte Carlo steps
 # biased_moves: false                # Bias move direction by Δμ instead of random
 # log_mu_diagnostics: false          # Emit per-species target/current μ each step
 # log_every: 1                       # Convergence-summary logging interval
-# y1: 0.75                           # Mole fraction (only used by the legacy total-pressure fallback)
-
-# --- Legacy fallback (no partial_pressures): total pressure + mole fraction ----
-# Remove `partial_pressures` above and instead provide:
-# pressure: 1.0
-# pressure_unit: bar
-# y1: 0.75                           # split for a 2-species binary mixture
+# --- Legacy fallback (superseded by mole_fractions) ---------------------------
+# `pressure` alone (no mole_fractions/partial_pressures) still works: a single
+# species is treated as a pure gas at that pressure; two species are split by
+# the binary mole fraction `y1` (default 0.75). Kept for old configs only.
+# y1: 0.75
 
 # --- Mixture variant (needs a matching restart file + one .xyz per species) ----
 # Species are recognized by composition, so any molecular formulas work as long
@@ -75,7 +80,8 @@ steps: 1000                          # Number of Monte Carlo steps
 # elements: [Cu, C, O, H]            # type order must match your LAMMPS data file
 # gas_list: [CH3OH, H2]
 # gas_template_dir: path/to/templates/   # must contain CH3OH.xyz and H2.xyz
-# partial_pressures:
+# pressure: 10.0                     # 10 bar total: 7.5 bar CH3OH + 2.5 bar H2
+# mole_fractions:
 #   CH3OH: 0.75
 #   H2: 0.25
 # pressure_unit: bar

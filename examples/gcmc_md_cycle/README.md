@@ -38,8 +38,9 @@ or adjust the variables in `submit_slurm.sh` and `sbatch` it.
 | Pure H2 on Fe | `config_h2.yaml` | `input_h2.lammps` | `seeds/fe_slab_h2.lammps` (400 Fe + 16 H2) |
 | Binary H2/N2 | `config_h2_n2.yaml` | `input_h2_n2.lammps` | `seeds/fe_slab_h2_n2.lammps` (400 Fe + 16 H2 + 6 N2) |
 
-The binary variant drives each species to its own partial pressure
-(`partial_pressures`). Atom-type order is defined by `elements` in the config
+The binary variant drives each species to its own partial pressure, specified
+as a total `pressure` split by `mole_fractions` (absolute `partial_pressures`
+are also accepted). Atom-type order is defined by `elements` in the config
 and must match the seed file and the `pair_coeff` type indices in the MD input.
 
 **Ternary+ mixtures (e.g. H2/N2/NH3):** the GCMC half handles any number of
@@ -111,3 +112,8 @@ the Morse H2 vibrates with a ~8 fs period).
   `SLURM_*`/`PMI*` around the `lmp` call.
 - **`LAMMPS_POTENTIALS`**: conda-forge LAMMPS ships no potentials folder; the
   driver points it at `potentials/` here (Mendelev Fe EAM included).
+- **The synced env snapshots comet at sync time**: since comet is a regular
+  (non-editable) install in the conda-sync'd env, pulling new comet source
+  requires `pip install <repo>` into the env AND a re-run of `conda-sync`,
+  or compute-node jobs run the old package (symptom: new config keys rejected
+  with "Extra inputs are not permitted").

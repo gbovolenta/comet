@@ -64,6 +64,10 @@ class RunConfig(BaseModel):
     temperature: float
 
     # --- pressure / chemical potential ---
+    # Preferred input: total `pressure` + per-species `mole_fractions`
+    # (p_i = y_i * pressure). `partial_pressures` remains accepted as the
+    # absolute-pressure alternative; fractions resolve into it at validation.
+    mole_fractions: Optional[Dict[str, float]] = None
     partial_pressures: Optional[Dict[str, float]] = None
     pressure: Optional[float] = None
     pressure_unit: PressureUnit = "bar"
@@ -120,6 +124,32 @@ class RunConfig(BaseModel):
         if self.slab is not None and self.slab not in self.elements:
             raise ValueError(f"slab {self.slab!r} must be one of elements {self.elements}")
 
+        if self.mole_fractions is not None:
+            if self.partial_pressures is not None:
+                raise ValueError(
+                    "provide either 'mole_fractions' or 'partial_pressures', not both"
+                )
+            if self.pressure is None:
+                raise ValueError("'mole_fractions' requires a total 'pressure'")
+            unknown = set(self.mole_fractions) - set(self.gas_list)
+            if unknown:
+                raise ValueError(
+                    f"mole_fractions has species not in gas_list: {sorted(unknown)}"
+                )
+            for gas, y in self.mole_fractions.items():
+                if not 0.0 < y <= 1.0:
+                    raise ValueError(
+                        f"mole_fractions[{gas}] = {y} must be in (0, 1]"
+                    )
+            total = sum(self.mole_fractions.values())
+            if total > 1.0 + 1e-9:
+                raise ValueError(f"mole_fractions sum to {total:.6f} > 1")
+            # Resolve to absolute partial pressures; a species omitted from
+            # mole_fractions stays frozen, same as with partial_pressures.
+            self.partial_pressures = {
+                gas: y * self.pressure for gas, y in self.mole_fractions.items()
+            }
+
         if self.partial_pressures is not None:
             unknown = set(self.partial_pressures) - set(self.gas_list)
             if unknown:
@@ -128,7 +158,8 @@ class RunConfig(BaseModel):
                 )
         elif self.pressure is None:
             raise ValueError(
-                "provide either 'partial_pressures' or 'pressure' to set chemical-potential targets"
+                "provide 'pressure' + 'mole_fractions' (or 'partial_pressures') "
+                "to set chemical-potential targets"
             )
 
         if self.energy_backend == "mace" and self.model_dir is None:

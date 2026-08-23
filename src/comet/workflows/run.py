@@ -24,7 +24,12 @@ __all__ = ["cycle", "run", "setup_logging"]
 def _log_run_header(config: RunConfig) -> None:
     """Write a compact summary of the current run settings to the log."""
     unit = config.pressure_unit
-    if config.partial_pressures is not None:
+    if config.mole_fractions is not None:
+        pressure_desc = (
+            f"total={config.pressure} {unit}, mole_fractions={config.mole_fractions} "
+            f"-> partial_pressures={config.partial_pressures} {unit}"
+        )
+    elif config.partial_pressures is not None:
         pressure_desc = f"partial_pressures={config.partial_pressures} {unit}"
     else:
         pressure_desc = f"{config.pressure} {unit}"

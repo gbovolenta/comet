@@ -6,6 +6,16 @@ All notable changes to COMET are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **`mole_fractions` + total `pressure` is now the primary μ input**:
+  ``pressure: 10.0`` with ``mole_fractions: {H2: 0.75, N2: 0.25}`` resolves to
+  per-species partial pressures (p_i = y_i·P) at validation time. Omitted
+  species stay frozen; fractions must each lie in (0, 1] and sum to ≤ 1
+  (below 1 is allowed — the remainder is simply not simulated). Mutually
+  exclusive with `partial_pressures`, which remains accepted as the
+  absolute-pressure alternative. All examples converted; this also removes
+  the ambiguity of the old mixture example, whose partial pressures
+  (0.75/0.25 bar) read like fractions. The legacy binary `y1` fallback is
+  kept for old configs but superseded.
 - **`comet cycle` — built-in GCMC↔MD alternation via ASE MD (no LAMMPS
   needed).** With an `md:` config block, comet alternates the GCMC loop with
   ASE dynamics on slab+gas using the same cached MACE calculator for both
