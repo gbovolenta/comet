@@ -6,6 +6,13 @@ All notable changes to COMET are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **BEEP-style log presentation.** `gcmc_run.log` now opens with the COMET
+  ASCII banner (version, workflow name, author) followed by a framed
+  settings block, and the run is divided into framed sections (SYSTEM SETUP,
+  GCMC SAMPLING, RESTART OUTPUT; per-cycle GCMC/MD sections in
+  `comet cycle`). INFO lines are written without the `INFO:` level prefix
+  (warnings and errors keep theirs); the file log records INFO and above,
+  omitting per-step DEBUG detail for a clean narrative.
 - **Composition input via integer `ratios` + total `pressure`**:
   ``pressure: 150.0`` with ``ratios: {H2: 3, N2: 1}`` resolves to per-species
   partial pressures (p_i = r_i/Σr·P) at validation time. Integer ratios keep

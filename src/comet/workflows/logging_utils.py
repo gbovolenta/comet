@@ -6,9 +6,72 @@ import logging
 
 import numpy as np
 
+from comet import __version__
+
 # Module-level logger handle. Handlers (and the log file) are attached lazily by
 # setup_logging(), which run() calls — importing this module must not write files.
 logger = logging.getLogger("gcmc")
+
+_RULE = "=" * 80
+_THIN_RULE = "-" * 80
+
+_BANNER_ART = r"""
+ ██████╗ ██████╗ ███╗   ███╗███████╗████████╗
+██╔════╝██╔═══██╗████╗ ████║██╔════╝╚══██╔══╝
+██║     ██║   ██║██╔████╔██║█████╗     ██║
+██║     ██║   ██║██║╚██╔╝██║██╔══╝     ██║
+╚██████╗╚██████╔╝██║ ╚═╝ ██║███████╗   ██║
+ ╚═════╝ ╚═════╝ ╚═╝     ╚═╝╚══════╝   ╚═╝
+"""
+
+
+class _LevelAwareFormatter(logging.Formatter):
+    """Plain messages for INFO; keep the level prefix for everything else."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        if record.levelno == logging.INFO:
+            self._style._fmt = "%(message)s"
+        else:
+            self._style._fmt = "%(levelname)s: %(message)s"
+        return super().format(record)
+
+
+def log_banner(workflow: str) -> None:
+    """Write the COMET welcome banner and program header to the log."""
+    width = 54
+    art_lines = [line for line in _BANNER_ART.splitlines() if line.strip()]
+    dots = "·" * (width + 4)
+    logger.info(dots)
+    for line in art_lines:
+        logger.info(": %s :", line.ljust(width))
+    logger.info(dots)
+    logger.info("")
+    logger.info(_RULE)
+    logger.info(f"COMET — v{__version__}".center(80))
+    logger.info("Constant-pressure COntroller using the METropolis algorithm".center(80))
+    logger.info(_RULE)
+    logger.info("")
+    logger.info("  Workflow:  %s", workflow)
+    logger.info("")
+    logger.info("  By: Giulia M. Bovolenta")
+    logger.info("")
+
+
+def log_section(title: str) -> None:
+    """Write a framed section header separating the major workflow blocks."""
+    logger.info("")
+    logger.info(_RULE)
+    logger.info("  %s", title)
+    logger.info(_RULE)
+
+
+def log_settings(pairs: dict) -> None:
+    """Write an aligned key/value settings block framed by thin rules."""
+    logger.info(_THIN_RULE)
+    key_width = max(len(k) for k in pairs) + 2
+    for key, value in pairs.items():
+        logger.info("  %s%s", f"{key}:".ljust(key_width), value)
+    logger.info(_THIN_RULE)
 
 
 def setup_logging() -> logging.Logger:
@@ -44,12 +107,13 @@ def setup_logging() -> logging.Logger:
                 pkg.addHandler(handler)
         return gcmc
 
-    # Formatter without timestamps
-    formatter = logging.Formatter("%(levelname)s: %(message)s")
+    # No timestamps; DEBUG/INFO messages are printed without a level prefix.
+    formatter = _LevelAwareFormatter()
 
-    # File handler (DEBUG+)
+    # File handler (INFO+; per-step DEBUG detail is omitted for a clean
+    # narrative log — lower this to DEBUG when troubleshooting)
     fh = logging.FileHandler("gcmc_run.log", mode="w")
-    fh.setLevel(logging.DEBUG)
+    fh.setLevel(logging.INFO)
     fh.setFormatter(formatter)
 
     # Console handler (INFO+)

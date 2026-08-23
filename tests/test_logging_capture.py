@@ -54,3 +54,42 @@ def test_setup_logging_is_idempotent(tmp_path, monkeypatch):
         assert len(logging.getLogger("comet").handlers) == n_pkg
     finally:
         _reset_handlers()
+
+
+def test_info_lines_have_no_level_prefix_warnings_keep_it(tmp_path, monkeypatch):
+    _reset_handlers()
+    monkeypatch.chdir(tmp_path)
+    try:
+        setup_logging()
+        logging.getLogger("gcmc").info("plain info line")
+        logging.getLogger("gcmc").warning("warned line")
+        for handler in logging.getLogger("gcmc").handlers:
+            handler.flush()
+        text = (tmp_path / "gcmc_run.log").read_text()
+    finally:
+        _reset_handlers()
+
+    assert "plain info line" in text
+    assert "INFO: plain info line" not in text
+    assert "WARNING: warned line" in text
+
+
+def test_banner_contains_author_and_version_no_quote(tmp_path, monkeypatch):
+    from comet import __version__
+    from comet.workflows.logging_utils import log_banner
+
+    _reset_handlers()
+    monkeypatch.chdir(tmp_path)
+    try:
+        setup_logging()
+        log_banner("GCMC pressure control")
+        for handler in logging.getLogger("gcmc").handlers:
+            handler.flush()
+        text = (tmp_path / "gcmc_run.log").read_text()
+    finally:
+        _reset_handlers()
+
+    assert f"COMET — v{__version__}" in text
+    assert "Giulia M. Bovolenta" in text
+    assert "GCMC pressure control" in text
+    assert '"' not in text   # no quotation block

@@ -162,7 +162,7 @@ def build_initial_system(config: RunConfig, backend: EnergyBackend) -> Optional[
     logger.info(
         "Integer convergence targets: %s (implied pressures [atm]: %s)",
         {g: n for g, n in n_targets.items() if np.isfinite(mu_dict[g])},
-        {g: round(compute_pressure_atm(T, V, n), 2)
+        {g: round(float(compute_pressure_atm(T, V, n)), 2)
          for g, n in n_targets.items() if np.isfinite(mu_dict[g])},
     )
 
@@ -182,7 +182,7 @@ def build_initial_system(config: RunConfig, backend: EnergyBackend) -> Optional[
         gas_list=config.gas_list,
     )
     gas_en_dict = backend.gas_energies(gas_templates_all)
-    logger.debug(gas_en_dict)
+    logger.debug("Gas reference energies [eV]: %s", gas_en_dict)
 
     logger.info(
         "Initial gas-molecule count: %s, Initial energy: %s eV",

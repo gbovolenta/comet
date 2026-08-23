@@ -42,7 +42,10 @@ def bounds_from_restart(
     zlo, zhi = z_cutoff, cell[2, 2]
 
     bounds = (xlo, xhi, ylo, yhi, zlo, zhi)
-    logger.info("Generated GCMC bounds from restart: %s", bounds)
+    logger.info(
+        "GCMC insertion region [Å]: x %.2f..%.2f, y %.2f..%.2f, z %.2f..%.2f",
+        *[float(b) for b in bounds],
+    )
     return bounds
 
 

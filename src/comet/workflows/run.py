@@ -15,46 +15,57 @@ import numpy as np
 
 from comet.config.schema import RunConfig, load_run_config
 from comet.potentials.backends import build_energy_backend
-from comet.workflows.logging_utils import logger, setup_logging
+from comet.workflows.logging_utils import (
+    log_banner,
+    log_section,
+    log_settings,
+    logger,
+    setup_logging,
+)
 from comet.workflows.stages import build_initial_system, run_mc_loop, write_restart
 
 __all__ = ["cycle", "run", "setup_logging"]
 
 
 def _log_run_header(config: RunConfig) -> None:
-    """Write a compact summary of the current run settings to the log."""
+    """Write the framed settings block for the current run to the log."""
     unit = config.pressure_unit
+    settings = {
+        "Energy backend": config.energy_backend,
+        "Output directory": config.bdir,
+        "Restart file": config.restart_path,
+        "Gas species": ", ".join(config.gas_list),
+        "Temperature": f"{config.temperature:.2f} K",
+    }
     if config.ratios is not None:
-        pressure_desc = (
-            f"total={config.pressure} {unit}, ratios={config.ratios} "
-            f"-> partial_pressures={ {g: round(p, 4) for g, p in config.partial_pressures.items()} } {unit}"
+        settings["Total pressure"] = f"{config.pressure} {unit}"
+        settings["Composition"] = (
+            ":".join(config.ratios) + " = " + ":".join(str(r) for r in config.ratios.values())
+        )
+        settings["Partial pressures"] = ", ".join(
+            f"{g}: {p:.4g} {unit}" for g, p in config.partial_pressures.items()
         )
     elif config.partial_pressures is not None:
-        pressure_desc = f"partial_pressures={config.partial_pressures} {unit}"
-    else:
-        pressure_desc = f"{config.pressure} {unit}"
-    logger.info(
-        "Run header: backend=%s, bdir=%s, temperature=%.3f K, pressure=%s, "
-        "run_until_converged=%s, steps=%s, max_steps=%s, biased_moves=%s",
-        config.energy_backend,
-        config.bdir,
-        config.temperature,
-        pressure_desc,
-        config.run_until_converged,
-        config.steps,
-        config.max_steps,
-        config.biased_moves,
-    )
-    logger.info("Log settings: log_mu_diagnostics=%s", config.log_mu_diagnostics)
-    if config.energy_backend == "orca":
-        logger.info(
-            "ORCA settings: method=%s, basis=%s, nprocs=%s, charge=%s, mult=%s",
-            config.orca_method,
-            config.orca_basis,
-            config.orca_nprocs,
-            config.orca_charge,
-            config.orca_mult,
+        settings["Partial pressures"] = ", ".join(
+            f"{g}: {p:.4g} {unit}" for g, p in config.partial_pressures.items()
         )
+    else:
+        settings["Total pressure"] = f"{config.pressure} {unit} (legacy mode)"
+    settings["MC steps"] = config.steps
+    settings["Run until converged"] = f"{config.run_until_converged} (max_steps: {config.max_steps})"
+    settings["Biased moves"] = config.biased_moves
+    settings["Seed"] = config.seed if config.seed is not None else "not set (irreproducible)"
+    if config.energy_backend == "orca":
+        settings["ORCA"] = (
+            f"{config.orca_method}/{config.orca_basis}, nprocs={config.orca_nprocs}, "
+            f"charge={config.orca_charge}, mult={config.orca_mult}"
+        )
+    if config.md is not None:
+        settings["MD cycles"] = config.md.n_cycles
+        settings["MD steps/cycle"] = f"{config.md.md_steps} x {config.md.timestep_fs} fs"
+        settings["MD thermostat"] = f"Bussi (CSVR), tau = {config.md.tau_t_ps} ps"
+        settings["MD frozen bottom"] = f"z < z_min + {config.md.freeze_bottom} Å"
+    log_settings(settings)
 
 
 def run(config_path: str) -> int:
@@ -68,22 +79,26 @@ def run(config_path: str) -> int:
     """
     setup_logging()  # attach handlers / create gcmc_run.log now, not at import
     config = load_run_config(config_path)
+    log_banner("GCMC pressure control")
     if config.seed is not None:
         # Seed both RNGs the workflow uses: `random` (MC moves) and numpy
         # (Maxwell-Boltzmann velocities) — makes a run fully reproducible.
         random.seed(config.seed)
         np.random.seed(config.seed)
-        logger.info("Seeded RNGs with seed=%s", config.seed)
     Path(config.bdir).mkdir(parents=True, exist_ok=True)
     _log_run_header(config)
 
     backend = build_energy_backend(config)
 
+    log_section("SYSTEM SETUP")
     state = build_initial_system(config, backend)
     if state is None:  # trajectory or initial-energy failure (already logged)
         return 1
 
+    log_section("GCMC SAMPLING")
     state = run_mc_loop(state, config, backend)
+
+    log_section("RESTART OUTPUT")
     write_restart(state, config)
     return 0
 
@@ -106,13 +121,13 @@ def cycle(config_path: str) -> int:
 
     setup_logging()
     config = load_run_config(config_path)
+    log_banner("GCMC <-> MD cycling (ASE MD)")
     if config.md is None:
         logger.critical("comet cycle requires an `md:` block in the configuration")
         return 1
     if config.seed is not None:
         random.seed(config.seed)
         np.random.seed(config.seed)
-        logger.info("Seeded RNGs with seed=%s", config.seed)
     Path(config.bdir).mkdir(parents=True, exist_ok=True)
     _log_run_header(config)
 
@@ -126,16 +141,20 @@ def cycle(config_path: str) -> int:
         return 1
     calculator = backend.calculator_factory()
 
+    log_section("SYSTEM SETUP")
     state = build_initial_system(config, backend)
     if state is None:
         return 1
 
     n_cycles = config.md.n_cycles
     for i in range(1, n_cycles + 1):
-        logger.info("=== cycle %d/%d: GCMC ===", i, n_cycles)
+        log_section(f"CYCLE {i}/{n_cycles} — GCMC")
         state = run_mc_loop(state, config, backend)
-        logger.info("=== cycle %d/%d: MD ===", i, n_cycles)
+        log_section(f"CYCLE {i}/{n_cycles} — MD")
         state = run_md(state, config, calculator, backend, cycle_index=i)
         write_cycle_checkpoint(state, config, Path(config.bdir) / f"cycle_{i}.lammpsdata")
 
+    log_section("CYCLING COMPLETED")
+    logger.info("Finished %d GCMC <-> MD cycles. Final gas counts: %s",
+                n_cycles, state.gas_counts)
     return 0
