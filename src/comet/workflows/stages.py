@@ -420,7 +420,6 @@ def log_pressure_summary(state: GcmcState, config: RunConfig) -> None:
 
     logger.info("")
     header = f"  {'Species':<10}{f'p_final [{unit}]':>16}{f'p_target [{unit}]':>18}{'Δp':>10}"
-    logger.info("  Pressure control summary")
     logger.info(header)
     logger.info("  %s", "-" * (len(header) - 2))
     tot_fin = tot_req = 0.0
@@ -478,5 +477,10 @@ def write_restart(state: GcmcState, config: RunConfig) -> None:
                        state.mu_current, show_mu=config.log_mu_diagnostics)
     log_convergence_verdict(state)
     log_pressure_summary(state, config)
-    logger.info("Wrote %s", bdir / "initial.lammpsdata")
-    logger.info("Wrote %s", bdir / "mc_cycle.extxyz")
+    logger.info("Output files:")
+    logger.info("  %s", bdir / "initial.lammpsdata")
+    logger.info("      Pressure-controlled slab+gas configuration — the restart input for")
+    logger.info("      the next MD stage. Slab atom IDs are preserved; velocities are")
+    logger.info("      carried over (Maxwell-Boltzmann for newly inserted molecules).")
+    logger.info("  %s", bdir / "mc_cycle.extxyz")
+    logger.info("      Gas-box trajectory (extended XYZ), one frame per executed MC step.")

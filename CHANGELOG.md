@@ -20,10 +20,13 @@ All notable changes to COMET are documented here. Format loosely follows
   lines without Python dict braces. Convergence status prints one line per
   species — `H2: N = 12/12  ✔` (a ✔ at target, a bold dash ━ otherwise;
   frozen species labeled as such), with μ target/current/Δμ appended when
-  `log_mu_diagnostics` is enabled. The run closes with a **pressure control
-  summary**: final vs requested pressure per species and in total, with the
-  signed deviation, in the configured `pressure_unit` (also emitted at the
-  end of `comet cycle`).
+  `log_mu_diagnostics` is enabled. The run closes with a **PRESSURE CONTROL
+  SUMMARY** section (also at the end of `comet cycle`): final state,
+  per-species status, an explicit convergence verdict ("All species converged
+  to their target counts. ✔", or a WARNING naming the unconverged species),
+  the final-vs-requested pressure table per species and in total (signed
+  deviation, in the configured `pressure_unit`), and a description of each
+  output file and its purpose.
 - **Composition input via integer `ratios` + total `pressure`**:
   ``pressure: 150.0`` with ``ratios: {H2: 3, N2: 1}`` resolves to per-species
   partial pressures (p_i = r_i/Σr·P) at validation time. Integer ratios keep

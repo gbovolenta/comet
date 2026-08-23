@@ -105,7 +105,7 @@ def run(config_path: str) -> int:
     log_section("GCMC SAMPLING")
     state = run_mc_loop(state, config, backend)
 
-    log_section("RESTART OUTPUT")
+    log_section("PRESSURE CONTROL SUMMARY")
     write_restart(state, config)
     return 0
 
@@ -161,9 +161,19 @@ def cycle(config_path: str) -> int:
         state = run_md(state, config, calculator, backend, cycle_index=i)
         write_cycle_checkpoint(state, config, Path(config.bdir) / f"cycle_{i}.lammpsdata")
 
-    log_section("CYCLING COMPLETED")
+    log_section("PRESSURE CONTROL SUMMARY")
     logger.info("Finished %d GCMC <-> MD cycles. Final gas counts: %s",
                 n_cycles, _fmt_counts(state.gas_counts))
     log_convergence_verdict(state)
     log_pressure_summary(state, config)
+    bdir = Path(config.bdir)
+    logger.info("Output files:")
+    logger.info("  %s", bdir / "cycle_<i>.lammpsdata")
+    logger.info("      Per-cycle checkpoints (i = 1..%d): slab+gas after each MD segment,", n_cycles)
+    logger.info("      with the current velocities in LAMMPS metal units.")
+    logger.info("  %s", bdir / "mc_cycle.extxyz")
+    logger.info("      Gas-box trajectory across all GCMC segments (extended XYZ).")
+    if config.md.traj_every > 0:
+        logger.info("  %s", bdir / "md_cycle.extxyz")
+        logger.info("      Slab+gas MD trajectory, one frame every %d MD steps.", config.md.traj_every)
     return 0
