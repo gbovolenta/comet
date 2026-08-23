@@ -145,9 +145,10 @@ def log_species_status(
     With ``show_mu``, the target/current chemical potentials and Δμ are
     appended before the mark.
     """
+    rows = []  # (body, mark or None) — marks are appended in one aligned column
     for gas, mu_t in mu_target.items():
         if not np.isfinite(mu_t):
-            logger.info("  %s: frozen", gas)
+            rows.append((f"{gas}: frozen", None))
             continue
         n = int(gas_counts.get(gas, 0))
         target = int(n_targets.get(gas, 0))
@@ -161,7 +162,14 @@ def log_species_status(
             )
         else:
             mu_desc = ""
-        logger.info("  %s: N = %d/%d%s  %s", gas, n, target, mu_desc, mark)
+        rows.append((f"{gas}: N = {n}/{target}{mu_desc}", mark))
+
+    width = max(len(body) for body, _ in rows)
+    for body, mark in rows:
+        if mark is None:
+            logger.info("  %s", body)
+        else:
+            logger.info("  %s  %s", body.ljust(width), mark)
 
 
 def _fmt_counts(counts: dict) -> str:
