@@ -41,9 +41,11 @@ def test_valid_config_constructs():
     assert c.gas_masses_by_species() == {"H2": 2.01568, "N2": 28.014}
 
 
-def test_example_config_loads():
-    c = load_run_config(str(PROJECT_ROOT / "examples" / "config.yaml"))
-    assert c.energy_backend in ("mace", "orca")
+def test_example_configs_load():
+    for example in ("pure_H2", "H2_N2_gas_mixture"):
+        c = load_run_config(str(PROJECT_ROOT / "examples" / example / "config.yaml"))
+        assert c.energy_backend in ("mace", "orca")
+        assert c.ratios is not None and c.pressure is not None
 
 
 def test_slab_accepts_scalar_and_single_item_list():

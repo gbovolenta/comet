@@ -22,7 +22,7 @@ from comet.config.schema import load_run_config
 from comet.potentials.backends import EnergyBackend
 from comet.workflows.stages import build_initial_system, run_mc_loop, write_restart
 
-EXAMPLE_RESTART = PROJECT_ROOT / "examples" / "final.lammps"
+EXAMPLE_RESTART = PROJECT_ROOT / "examples" / "pure_H2" / "H2_P150bar_T723K.lammpsdata"
 
 
 def _stub_backend() -> EnergyBackend:

@@ -12,7 +12,7 @@ from comet.config.io import load_config
 
 def test_yaml_loader_preserves_keys():
     pytest.importorskip("yaml")
-    config = load_config(PROJECT_ROOT / "examples" / "config.yaml")
+    config = load_config(PROJECT_ROOT / "examples" / "pure_H2" / "config.yaml")
     assert isinstance(config, dict)
 
     # Keys the workflow actually consumes (see comet.workflows.run).

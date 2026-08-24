@@ -6,6 +6,12 @@ All notable changes to COMET are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **Self-contained example folders** replace the single `examples/config.yaml`:
+  `examples/pure_H2/` (H2/Fe at 150 bar, 723 K) and
+  `examples/H2_N2_gas_mixture/` (H2:N2 = 2:1, 150 bar total, 723 K), each with
+  its equilibrated LAMMPS seed, gas templates, and annotated config —
+  runnable in place with `comet run config.yaml`. README rewritten to match
+  the current feature set.
 - **BEEP-style log presentation.** `gcmc_run.log` now opens with the COMET
   ASCII banner (version, workflow name, author) followed by a framed
   settings block, and the run is divided into framed sections (SYSTEM SETUP,
@@ -67,15 +73,10 @@ All notable changes to COMET are documented here. Format loosely follows
   per-cycle `cycle_<i>.lammpsdata` checkpoints with real velocities.
   MACE-backend only (`EnergyBackend.calculator_factory`); orca is rejected
   with a clear error.
-- **End-to-end GCMC↔MD cycle example** (`examples/gcmc_md_cycle/`): a
-  scheduler-agnostic driver alternating comet GCMC with LAMMPS MD via the
-  restart-file contract, with two runnable CPU-testbed variants — pure H2/Fe
-  and a binary H2/N2 mixture (per-species pressure control) — plus NH3
-  template, seeds (+ generator), the Mendelev Fe EAM, a Slurm wrapper, and a
-  README covering the production swap points (LAMMPS-MACE/Kokkos, matched
-  fine-tuned model) and known deployment traps. Both variants validated on
-  cluster runs; mixture GCMC also covered by stub-backend pipeline tests
-  (`tests/test_mixture_workflow.py`, binary H2/N2 and ternary H2/N2/NH3).
+- **Mixture pipeline tests** (`tests/test_mixture_workflow.py`): stub-backend
+  end-to-end coverage of binary H2/N2 and ternary H2/N2/NH3 GCMC, and of the
+  GCMC↔MD restart-file contract (validated in cluster runs of both a pure-H2
+  and a binary-mixture cycle against LAMMPS MD).
 
 ### Fixed
 - **Package module loggers were silently dropped from gcmc_run.log.**
