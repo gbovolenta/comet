@@ -8,6 +8,16 @@ region until each species reaches the integer molecule count corresponding to
 its target partial pressure. It is built for hybrid GCMC/MD workflows, where
 pressure-control steps alternate with MD of the full slab+gas system.
 
+COMET was used to generate the results of:
+
+> G. M. Bovolenta and M. Parrinello, *The role of the N2/H2 reactant gas
+> mixture on nitrogen activation in the Haber–Bosch process*,
+> Nature Communications (2026).
+> [doi:10.1038/s41467-026-76887-5](https://www.nature.com/articles/s41467-026-76887-5)
+
+The MD inputs and computational details are available in the accompanying data
+repository: [doi:10.5281/zenodo.21745812](https://zenodo.org/records/21745812).
+
 Key properties:
 
 - **No hardcoded chemistry.** Any molecular formula works as a gas species
