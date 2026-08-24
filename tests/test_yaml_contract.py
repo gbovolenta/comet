@@ -12,19 +12,19 @@ from comet.config.io import load_config
 
 def test_yaml_loader_preserves_keys():
     pytest.importorskip("yaml")
-    config = load_config(PROJECT_ROOT / "examples" / "config.yaml")
+    config = load_config(PROJECT_ROOT / "examples" / "pure_H2" / "config.yaml")
     assert isinstance(config, dict)
 
     # Keys the workflow actually consumes (see comet.workflows.run).
+    # `slab` and `gas_masses` are optional (redundant consistency checks) and
+    # intentionally absent from the example.
     expected_keys = {
         "energy_backend",
         "bdir",
         "model_dir",
         "restart_path",
         "elements",
-        "slab",
         "gas_list",
-        "gas_masses",
         "gas_template_dir",
         "z_cutoff",
         "temperature",

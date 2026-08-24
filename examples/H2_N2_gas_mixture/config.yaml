@@ -1,0 +1,35 @@
+# COMET example: binary gas mixture — H2:N2 = 3:1 over an Fe slab at 150 bar
+# total, 723 K. Run from this directory:  comet run config.yaml
+# Provide your own MACE model (model_dir) or switch to energy_backend: orca.
+
+energy_backend: mace                 # "mace" or "orca"
+bdir: output/                        # output directory for generated files
+model_dir: path/to/mace.model        # MACE model file — provide your own
+
+restart_path: N2_H2_P150bar_T723K.lammpsdata
+
+# `elements` maps each symbol to a LAMMPS atom type by position (1-based):
+# [Fe, N, H] => type 1 = Fe, 2 = N, 3 = H — must match the restart's Masses section.
+elements: [Fe, N, H]
+
+gas_list: [H2, N2]
+gas_template_dir: templates/         # must contain H2.xyz and N2.xyz
+
+z_cutoff: 15.14698231002696          # molecules with COM above this form the gas region
+temperature: 723.0                   # [K]
+
+# Pressure control: total pressure split by integer composition ratios
+# (p_i = r_i/Σr · pressure -> 112.5 bar H2, 37.5 bar N2). Convergence targets
+# are the integer counts nearest pV/kBT that preserve the 3:1 ratio exactly;
+# omit a species from `ratios` to freeze it.
+pressure: 150.0
+ratios:
+  H2: 3
+  N2: 1
+pressure_unit: bar
+
+steps: 1000
+biased_moves: true                   # recommended for mixtures: deterministic
+                                     # direction from ΔN, species weighted by |ΔN|
+# seed: 42                           # set for a reproducible run
+# log_mu_diagnostics: true           # per-species μ detail in the status lines

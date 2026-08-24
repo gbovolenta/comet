@@ -3,6 +3,147 @@
 All notable changes to COMET are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+- **Self-contained example folders** replace the single `examples/config.yaml`:
+  `examples/pure_H2/` (H2/Fe at 150 bar, 723 K) and
+  `examples/H2_N2_gas_mixture/` (H2:N2 = 2:1, 150 bar total, 723 K), each with
+  its equilibrated LAMMPS seed, gas templates, and annotated config —
+  runnable in place with `comet run config.yaml`. README rewritten to match
+  the current feature set.
+- **BEEP-style log presentation.** `gcmc_run.log` now opens with the COMET
+  ASCII banner (version, workflow name, author) followed by a framed
+  settings block, and the run is divided into framed sections (SYSTEM SETUP,
+  GCMC SAMPLING, RESTART OUTPUT; per-cycle GCMC/MD sections in
+  `comet cycle`). INFO lines are written without the `INFO:` level prefix
+  (warnings and errors keep theirs); the file log records INFO and above,
+  omitting per-step DEBUG detail for a clean narrative. Block content was
+  audited for readability: a species table (initial count, N*, integer
+  target, implied pressure, μ_target) replaces the former dict-style lines;
+  duplicate count reports were removed at the source; the insertion region
+  is printed per axis; step and final-state lines are single consolidated
+  lines without Python dict braces. Convergence status prints one line per
+  species — `H2: N = 12/12  ✔` (a ✔ at target, a bold dash ━ otherwise;
+  frozen species labeled as such), with μ target/current/Δμ appended when
+  `log_mu_diagnostics` is enabled. The run closes with a **PRESSURE CONTROL
+  SUMMARY** section (also at the end of `comet cycle`): final state,
+  per-species status, an explicit convergence verdict ("All species converged
+  to their target counts. ✔", or a WARNING naming the unconverged species),
+  the final-vs-requested pressure table per species and in total (signed
+  deviation, in the configured `pressure_unit`), and a description of each
+  output file and its purpose.
+- **Composition input via integer `ratios` + total `pressure`**:
+  ``pressure: 150.0`` with ``ratios: {H2: 3, N2: 1}`` resolves to per-species
+  partial pressures (p_i = r_i/Σr·P) at validation time. Integer ratios keep
+  the composition exactly representable by integer molecule counts (a decimal
+  such as 0.3333 is not 1/3, so mole fractions were rejected as the input
+  form). Omitted species stay frozen. Mutually exclusive with
+  `partial_pressures`, which remains accepted as the absolute-pressure
+  alternative (no composition claim). All examples converted.
+
+### Changed
+- **Convergence is now judged on integer molecule counts, not a μ tolerance.**
+  At startup, integer per-species targets are computed as the counts nearest
+  the ideal-gas expectations N* = pV/kBT: with `ratios`, the total is
+  quantized to the nearest multiple of Σr and split exactly (composition
+  preserved by construction); with `partial_pressures`, each species is
+  rounded independently. A species is converged when its current count equals
+  its target; the loop terminates when all active species are simultaneously
+  at target. This replaces the fixed 1 meV μ tolerance, which was unreachable
+  at small N (adjacent integer occupations differ by kBT/N > tolerance).
+  Metropolis acceptance still uses the exact μ targets, so the sampled
+  ensemble is unchanged. Biased moves now take their direction
+  deterministically from sign(N_target − N) and weight species by |ΔN|
+  (`force_dmu_threshold` is retained in the config but unused). The expected
+  counts N*, the integer targets, and their implied pressures are logged at
+  startup.
+- **No fallback for unrepresentable states**: if the expected counts round
+  below one composition unit (ratios mode) or an active species' target
+  rounds to zero (partial-pressure mode), the run fails with the minimum
+  factor by which the gas volume or pressure must be increased. The bundled
+  example box at 1 bar targets ~0.1 molecules, so the example configs moved
+  to production-like high-pressure conditions (120–150 atm).
+- **`comet cycle` — built-in GCMC↔MD alternation via ASE MD (no LAMMPS
+  needed).** With an `md:` config block, comet alternates the GCMC loop with
+  ASE dynamics on slab+gas using the same cached MACE calculator for both
+  halves (PES-consistent by construction): Bussi/CSVR thermostat at the run
+  temperature, frozen bottom slab layers (`freeze_bottom`), a reflective lid
+  at the cell top, molecule-COM re-partitioning after each MD segment, and
+  per-cycle `cycle_<i>.lammpsdata` checkpoints with real velocities.
+  MACE-backend only (`EnergyBackend.calculator_factory`); orca is rejected
+  with a clear error.
+- **Mixture pipeline tests** (`tests/test_mixture_workflow.py`): stub-backend
+  end-to-end coverage of binary H2/N2 and ternary H2/N2/NH3 GCMC, and of the
+  GCMC↔MD restart-file contract (validated in cluster runs of both a pure-H2
+  and a binary-mixture cycle against LAMMPS MD).
+
+### Fixed
+- **Package module loggers were silently dropped from gcmc_run.log.**
+  `setup_logging` only attached handlers to the `"gcmc"` logger, so anything
+  logged via `logging.getLogger(__name__)` under the `comet.*` namespace —
+  spectator-fragment warnings from molecule recognition, the MACE
+  model/device line — propagated to the handler-less root logger and never
+  reached the file. Handlers are now attached to the `comet` parent logger
+  as well (found when spectator warnings were missing during GCMC↔MD
+  testbed debugging).
+- **Shared-calculator cross-talk crashed the MC loop at the first rejected
+  move (MACE backend).** Since the calculator cache (v0.3.1, 4ce973f) one
+  MACE calculator instance is attached to every structure it evaluates, but
+  it only holds its *latest* results — after evaluating a trial box, the
+  still-linked current box served up wrong-sized arrays and the extxyz
+  trajectory writer crashed (`could not broadcast (34,) into (32,)`),
+  stopping the loop at step 1. Found by the first GPU run with a MACE
+  foundation model. Two-part fix: the MACE backend queries the shared
+  calculator without attaching it, and `write_extxyz_sequence` writes a
+  calculator-free copy.
+
+### Changed
+- **No hardcoded surface or gas species.** Molecules are recognized once at
+  load time (bond connectivity + composition matching against the templates)
+  and tracked from then on by persistent per-atom molecule ids (ASE tags plus
+  a `{mol_id: species}` map) — identity is never re-derived from element
+  symbols or bond lengths. Consequences:
+  - **Any molecular formula works** (CH3OH, H2O, CO2, ... — not just
+    homonuclear diatomics). Insertion places the rigid template with a uniform
+    random orientation; deletion removes a uniformly chosen molecule by id.
+  - **Gas/slab partitioning is by molecule center of mass**, so molecules are
+    never split at `z_cutoff` and counts are integral by construction; the
+    z-cutoff auto-adjust loop is gone.
+  - **Slabs may contain any mix of elements**, including elements shared with
+    the gas (e.g. H2O over water ice): restart IDs are preserved for the
+    frozen slab block positionally, not by element
+    (`assign_ids_preserve_slab` takes `n_slab` instead of `slab_element`).
+  - **`gas_masses` and `slab` config keys are now optional** and redundant:
+    masses derive from template composition; both are only consistency-checked.
+  - Unrecognized gas-region fragments are kept as frozen spectators (counted
+    in energy/overlap, never inserted/deleted) with a warning. Two templates
+    with the same composition (isomers) are rejected at load time.
+  - Recognition bond cutoffs: covalent-radii baseline, overridden per element
+    pair by template bond length × 1.25 (robust to thermal bond stretching).
+- Removed `comet/system/partition.py` (`extract_box_gas`,
+  `per_species_atom_counts`, `all_integral_diatomics`) and the unused
+  `filter_gas_templates_by_species`; replaced by `comet/system/molecules.py`.
+
+### Fixed
+- **Insertion orientations are now uniform on SO(3).** Trial orientations were
+  generated by sequential uniform-angle rotations about x, y, z, which is not
+  uniform: bond directions were depleted along z (the surface normal) by ~25%
+  (component variance 0.25 vs the isotropic 1/3). Orientations are now drawn
+  via a uniform random quaternion (`scipy.spatial.transform.Rotation`), as the
+  GCMC acceptance rule assumes.
+- **Deletion now picks a molecule uniformly at random.** `deletion_mc`
+  previously deleted the *closest* valid diatomic pair (`prefer_closest`),
+  while the deletion acceptance prefactor n/V assumes the molecule was chosen
+  with probability 1/n — a detailed-balance violation that biased the sampled
+  ensemble toward removing compressed-bond molecules. Valid diatomics are now
+  enumerated by disjoint matching and one is chosen uniformly; the
+  `prefer_closest` argument is gone.
+
+Both fixes change sampled trajectories relative to earlier runs (the old
+ensemble was biased); deterministic setup numbers (μ targets, initial counts)
+are unaffected.
+
 ## [0.3.1] - 2026-06-12
 
 ### Fixed

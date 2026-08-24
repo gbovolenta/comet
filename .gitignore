@@ -12,3 +12,5 @@ env/
 # COMET run artifacts
 gcmc_run.log
 examples/output/
+build/
+cycles/

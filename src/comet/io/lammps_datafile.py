@@ -243,22 +243,25 @@ def assign_ids_preserve_slab(
     old_atoms_by_id: Dict[int, Tuple[int, np.ndarray, Tuple[int, int, int]]],
     new_struct: Atoms,
     elements: List[str],
-    slab_element: str = "Fe",
+    n_slab: int,
     tol: float = 1e-4,
     reuse_old_ids_for_gas: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Assign LAMMPS IDs to `new_struct` while preserving slab IDs exactly.
 
-    Slab atoms keep their matched old IDs. Non-slab atoms are renumbered into
-    the remaining free IDs in ascending order so the final ID list stays dense
+    The slab is identified positionally: the first ``n_slab`` atoms of
+    `new_struct` (the frozen slab/adsorbate block, unchanged by GCMC) keep
+    their matched old IDs — the slab may contain any mix of elements,
+    including elements shared with the gas. Remaining atoms are renumbered
+    into the free IDs in ascending order so the final ID list stays dense
     whenever the preserved slab IDs already fit within `1..N`.
 
     Args:
       old_atoms_by_id: Parsed old atom records keyed by LAMMPS atom ID.
-      new_struct: Structure that needs new LAMMPS IDs.
+      new_struct: Structure that needs new LAMMPS IDs (slab block first).
       elements: Element symbols defining the LAMMPS type order.
-      slab_element: Element symbol whose IDs must be preserved exactly.
+      n_slab: Number of leading atoms in `new_struct` that form the frozen slab.
       tol: Position-matching tolerance in Angstrom.
       reuse_old_ids_for_gas: Whether to preserve matched gas IDs when possible.
 
@@ -304,14 +307,17 @@ def assign_ids_preserve_slab(
     new_ids = -np.ones(len(new_struct), dtype=int)
     used_new_ids = set()
 
-    # Preserve slab IDs exactly
-    slab_mask = (new_syms == slab_element)
+    # Preserve slab IDs exactly (slab = leading n_slab atoms, element-agnostic)
+    if not (0 <= n_slab <= len(new_struct)):
+        raise ValueError(f"n_slab={n_slab} outside 0..{len(new_struct)}")
+    slab_mask = np.zeros(len(new_struct), dtype=bool)
+    slab_mask[:n_slab] = True
     slab_indices = np.where(slab_mask)[0]
     for i in slab_indices:
         oid = int(matched_old_id[i])
         if oid <= 0:
             raise RuntimeError(
-                f"Slab atom (symbol={slab_element}) at index {i} could not be matched to an old atom within tol={tol}."
+                f"Slab atom (symbol={new_syms[i]}) at index {i} could not be matched to an old atom within tol={tol}."
             )
         if oid in used_new_ids:
             raise RuntimeError(f"Duplicate preserved slab ID encountered: {oid}")

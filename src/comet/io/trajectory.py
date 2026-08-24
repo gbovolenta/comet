@@ -37,7 +37,10 @@ def write_extxyz_sequence(path: Path, atoms: Atoms) -> None:
         atoms (Atoms): ASE Atoms object to append.
     """
     try:
-        write(str(path), atoms, format="extxyz", append=True)
+        # Write a calculator-free snapshot: copy() drops `.calc`, so the writer
+        # can never pull results that a shared calculator computed for a
+        # different (e.g. rejected-trial) structure.
+        write(str(path), atoms.copy(), format="extxyz", append=True)
         logger.debug(f"Appended frame to {path}")
     except Exception as e:
         logger.error(f"Failed writing extxyz: {e}")

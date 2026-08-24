@@ -22,7 +22,7 @@ from comet.config.schema import load_run_config
 from comet.potentials.backends import EnergyBackend
 from comet.workflows.stages import build_initial_system, run_mc_loop, write_restart
 
-EXAMPLE_RESTART = PROJECT_ROOT / "examples" / "final.lammps"
+EXAMPLE_RESTART = PROJECT_ROOT / "examples" / "pure_H2" / "H2_P150bar_T723K.lammpsdata"
 
 
 def _stub_backend() -> EnergyBackend:
@@ -52,8 +52,8 @@ gas_list: [H2]
 gas_template_dir: {templates}
 z_cutoff: 15.14698231002696
 temperature: 823.0
-pressure: 1.0
-pressure_unit: bar
+pressure: 120.0
+pressure_unit: atm
 gas_masses: [2.01568]
 steps: 2
 """
@@ -109,8 +109,8 @@ gas_list: [H2]
 gas_template_dir: {templates}
 z_cutoff: 15.0
 temperature: 823.0
-pressure: 1.0
-pressure_unit: bar
+pressure: 120.0
+pressure_unit: atm
 gas_masses: [2.01568]
 steps: 1
 """
@@ -139,6 +139,11 @@ def test_run_orchestration_with_stub_backend(tmp_path, monkeypatch):
     assert rc == 0
     assert (tmp_path / "out" / "initial.lammpsdata").exists()
     assert (tmp_path / "out" / "mc_cycle.extxyz").exists()
+
+    # The final block states the convergence verdict explicitly: 2 steps
+    # cannot bring 16 H2 to the target of 12, so the warning form appears.
+    log_text = (tmp_path / "gcmc_run.log").read_text()
+    assert "Species not at their target counts: H2" in log_text
 
 
 def test_build_energy_backend_orca_constructs(tmp_path):
@@ -176,8 +181,8 @@ gas_list: [H2]
 gas_template_dir: {templates}
 z_cutoff: 15.14698231002696
 temperature: 823.0
-pressure: 1.0
-pressure_unit: bar
+pressure: 120.0
+pressure_unit: atm
 gas_masses: [2.01568]
 steps: 5
 seed: 123

@@ -23,54 +23,58 @@ def test_choose_unbiased_move_uses_random_direction(monkeypatch):
     assert ins is False
 
 
-def test_choose_biased_move_single_species_forces_direction():
+def test_choose_biased_move_returns_none_when_all_converged():
+    assert choose_biased_move({"H2": 3}, {"H2": 3}, set()) == (None, None)
+
+
+def test_choose_biased_move_single_species_inserts_below_target():
     move_name, ins = choose_biased_move(
-        mu_target={"H2": -0.5},
-        mu_current={"H2": -1.0},
-        unconverged={"H2"},
+        n_targets={"H2": 4},
         gas_counts={"H2": 2},
-        force_dmu_threshold=0.0,
+        unconverged={"H2"},
         force_single_species=True,
     )
     assert move_name == "H2"
     assert ins is True
 
 
-def test_choose_biased_move_prioritizes_missing_species(monkeypatch):
-    monkeypatch.setattr("comet.mc.moves.random.choice", lambda xs: xs[0])
+def test_choose_biased_move_single_species_deletes_above_target():
     move_name, ins = choose_biased_move(
-        mu_target={"H2": -0.5, "N2": -1.0},
-        mu_current={"H2": float("-inf"), "N2": -1.1},
-        unconverged={"H2", "N2"},
-        gas_counts={"H2": 0, "N2": 2},
+        n_targets={"H2": 4},
+        gas_counts={"H2": 7},
+        unconverged={"H2"},
+        force_single_species=True,
     )
     assert move_name == "H2"
-    assert ins is True
-
-
-def test_choose_biased_move_uses_weighted_species_and_threshold_direction(monkeypatch):
-    monkeypatch.setattr("comet.mc.moves.random.choices", lambda seq, weights, k: ["N2"])
-    move_name, ins = choose_biased_move(
-        mu_target={"H2": -0.5, "N2": -1.5},
-        mu_current={"H2": -0.6, "N2": -1.0},
-        unconverged={"H2", "N2"},
-        gas_counts={"H2": 2, "N2": 3},
-        force_dmu_threshold=0.1,
-    )
-    assert move_name == "N2"
     assert ins is False
 
 
-def test_choose_biased_move_below_threshold_falls_back_to_random_direction(monkeypatch):
-    monkeypatch.setattr("comet.mc.moves.random.choices", lambda seq, weights, k: ["H2"])
-    monkeypatch.setattr("comet.mc.moves.random.random", lambda: 0.3)
+def test_choose_biased_move_weights_species_by_count_mismatch(monkeypatch):
+    captured = {}
+
+    def fake_choices(seq, weights, k):
+        captured["seq"] = list(seq)
+        captured["weights"] = list(weights)
+        return ["N2"]
+
+    monkeypatch.setattr("comet.mc.moves.random.choices", fake_choices)
     move_name, ins = choose_biased_move(
-        mu_target={"H2": -0.50},
-        mu_current={"H2": -0.52},
-        unconverged={"H2"},
-        gas_counts={"H2": 1},
-        force_dmu_threshold=0.1,
-        force_single_species=False,
+        n_targets={"H2": 12, "N2": 6},
+        gas_counts={"H2": 11, "N2": 9},   # ΔN = +1, -3
+        unconverged={"H2", "N2"},
     )
-    assert move_name == "H2"
-    assert ins is True
+    assert move_name == "N2"
+    assert ins is False                    # above target -> delete
+    weights = dict(zip(captured["seq"], captured["weights"]))
+    assert weights == {"H2": 1, "N2": 3}   # |ΔN| weighting
+
+
+def test_choose_biased_move_direction_is_deterministic_from_sign():
+    # Below target -> insert, regardless of RNG state.
+    move_name, ins = choose_biased_move(
+        n_targets={"H2": 5},
+        gas_counts={"H2": 0},
+        unconverged={"H2"},
+        force_single_species=True,
+    )
+    assert (move_name, ins) == ("H2", True)

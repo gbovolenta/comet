@@ -1,5 +1,5 @@
 """Workflow entry points for comet."""
 
-from .run import run
+from .run import cycle, run
 
-__all__ = ["run"]
+__all__ = ["cycle", "run"]
