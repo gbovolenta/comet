@@ -1,6 +1,6 @@
 # COMET
 
-**C**onstant-pressure C**O**ntroller using the **MET**ropolis algorithm.
+Pressure **CO**ntroller using the **MET**ropolis algorithm (COMET).
 
 COMET performs grand-canonical Monte Carlo (GCMC) pressure control of the gas
 reservoir above a slab: molecules are inserted into and deleted from the gas
@@ -51,7 +51,7 @@ Two self-contained examples ship with the repository:
 | Example | System |
 |---|---|
 | `examples/pure_H2/` | single-component H2 over Fe at 150 bar, 723 K |
-| `examples/H2_N2_gas_mixture/` | binary H2:N2 = 2:1 mixture, 150 bar total, 723 K |
+| `examples/H2_N2_gas_mixture/` | binary H2:N2 = 3:1 mixture, 150 bar total, 723 K |
 
 Each folder contains the LAMMPS seed structure, the gas templates, and a
 `config.yaml`; supply your own MACE model (`model_dir`) and run from inside
@@ -80,7 +80,7 @@ z_cutoff: 15.147                # gas region: molecule COM above this [Å]
 temperature: 723.0
 
 pressure: 150.0                 # total pressure ...
-ratios: {H2: 2, N2: 1}          # ... split by integer composition ratios
+ratios: {H2: 3, N2: 1}          # ... split by integer composition ratios
 pressure_unit: bar
 
 steps: 1000
