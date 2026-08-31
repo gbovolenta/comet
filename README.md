@@ -17,7 +17,7 @@ repository: [doi:10.5281/zenodo.21745812](https://zenodo.org/records/21745812).
 General features:
 
 - **Gas handling.** Any molecular formula can be used as a gas species (H₂, N₂, NH₃, CH₃OH, ...). Molecules are identified once at load time from their bond connectivity and elemental composition, then tracked using persistent molecule IDs. The slab can contain any combination of elements, including elements also present in the gas phase. Molecular masses are determined automatically from the gas templates.
-- **Mixtures with exact composition.** The mixture composition is specified by integer ratios, for example ratios: {H2: 3, N2: 1}, together with a total pressure. COMET determines the whole-molecule populations that most closely approximate the ideal-gas target PV/kBT, while preserving the specified molecular ratio exactly.
+- **Mixtures with exact composition.** The mixture composition is specified by integer ratios, for example `ratios: {H2: 3, N2: 1}`, together with a total pressure. COMET determines the whole-molecule populations that most closely approximate the ideal-gas target PV/kBT, while preserving the specified molecular ratio exactly.
 - **Molecule-aware partitioning.** The `z_cutoff` separates the buffer region from the pressure-control region used for GCMC insertion and deletion moves. Molecules are assigned by center-of-mass position, so they are never split across the boundary.
 - **Energy evaluation.** COMET supports MACE (`pip install comet[mace]`) and ORCA as energy-evaluation engines for the Metropolis acceptance criterion. MACE models are supplied via `model_dir`, with foundation models supported directly; ORCA requires the `orca` executable to be available on `PATH`.
 
@@ -72,10 +72,6 @@ steps: 1000
 biased_moves: true              # recommended for mixtures
 seed: 42                        # reproducible runs (omit for independent runs)
 ```
-
-Absolute per-species `partial_pressures` are accepted in place of
-`pressure` + `ratios` (targets are then rounded per species, without a
-composition constraint). The `seed` makes runs bit-reproducible on CPU.
 
 
 ## Output
