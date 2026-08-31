@@ -1,12 +1,8 @@
 # COMET
 
-Pressure **CO**ntroller using the **MET**ropolis algorithm (COMET).
+COMET (Pressure **CO**ntroller using the **MET**ropolis algorithm) performs grand-canonical Monte Carlo (GCMC) pressure control for gas–surface simulations. It inserts and deletes molecules in a designated gas-phase region using Metropolis moves at prescribed chemical potentials, enabling control of the partial pressure of one or more gas species.
 
-COMET performs grand-canonical Monte Carlo (GCMC) pressure control of the gas
-reservoir above a slab: molecules are inserted into and deleted from the gas
-region until each species reaches the integer molecule count corresponding to
-its target partial pressure. It is built for hybrid GCMC/MD workflows, where
-pressure-control steps alternate with MD of the full slab+gas system.
+COMET is intended as the GCMC component of hybrid GCMC/MD workflows: molecular dynamics is performed by an external engine, while COMET periodically updates the gas reservoir. By restricting GCMC moves to a control region separated from the reactive surface by a buffer, pressure can be maintained without directly perturbing interfacial chemistry.
 
 COMET was used to generate the results of:
 
@@ -18,24 +14,13 @@ COMET was used to generate the results of:
 The MD inputs and computational details are available in the accompanying data
 repository: [doi:10.5281/zenodo.21745812](https://zenodo.org/records/21745812).
 
-Key properties:
+General features:
 
-- **No hardcoded chemistry.** Any molecular formula works as a gas species
-  (H2, N2, NH3, CH3OH, ...); molecules are recognized once at load time by
-  bond connectivity and composition, then tracked by persistent molecule ids.
-  The slab may contain any mix of elements, including elements shared with
-  the gas. Molecular masses are derived from the gas templates.
-- **Mixtures with exact composition.** The composition is given as integer
-  `ratios` and a total `pressure`; convergence targets are the integer counts
-  nearest pV/kBT that preserve the ratio exactly. Species can be frozen by
-  omission. States that do not fit the gas volume fail with the required
-  volume/pressure factor instead of being silently approximated.
-- **Molecule-aware partitioning.** Gas and slab are separated by molecule
-  center of mass at `z_cutoff`, so molecules are never split at the boundary;
-  species that adsorb during MD are frozen on the slab side on re-entry.
-- **Energy backends**: MACE (`pip install comet[mace]`; the model file is
-  supplied via `model_dir`, foundation models work directly) or ORCA
-  (`orca` executable on `PATH`).
+- **Gas handling.** Any molecular formula can be used as a gas species (H₂, N₂, NH₃, CH₃OH, ...). Molecules are identified once at load time from their bond connectivity and elemental composition, then tracked using persistent molecule IDs. The slab can contain any combination of elements, including elements also present in the gas phase. Molecular masses are determined automatically from the gas templates.
+- **Mixtures with exact composition.** The mixture composition is specified by integer ratios, for example ratios: {H2: 3, N2: 1}, together with a total pressure. COMET determines the whole-molecule populations that most closely approximate the ideal-gas target PV/kBT, while preserving the specified molecular ratio exactly.
+- **Molecule-aware partitioning.** The `z_cutoff` separates the buffer region from the pressure-control region used for GCMC insertion and deletion moves. Molecules are assigned by center-of-mass position, so they are never split across the boundary.
+- **Energy evaluation.** COMET supports MACE (`pip install comet[mace]`) and ORCA as energy-evaluation engines for the Metropolis acceptance criterion. MACE models are supplied via `model_dir`, with foundation models supported directly; ORCA requires the `orca` executable to be available on `PATH`.
+
 
 ## Installation
 
@@ -92,31 +77,14 @@ Absolute per-species `partial_pressures` are accepted in place of
 `pressure` + `ratios` (targets are then rounded per species, without a
 composition constraint). The `seed` makes runs bit-reproducible on CPU.
 
-## GCMC ↔ MD cycling
-
-Two supported routes:
-
-1. **External MD via files**: alternate `comet run` with your MD engine
-   through the restart-file contract — comet writes `initial.lammpsdata`
-   (the pressure-controlled configuration), MD writes back a data file that
-   becomes the next `restart_path`. Slab atom ids survive the whole chain,
-   and molecules are re-recognized after MD (adsorbed species move to the
-   frozen slab side). In production, LAMMPS runs `pair_style mace` with the
-   same model as the GCMC half so both halves share one PES.
-2. **Built-in ASE MD** (`comet cycle config.yaml`, MACE backend only): with an
-   `md:` block in the config, comet alternates GCMC with ASE dynamics
-   (Bussi/CSVR thermostat, frozen bottom slab layers, reflective lid) using
-   the same calculator instance for both halves — no external MD engine
-   required. Per-cycle `cycle_<i>.lammpsdata` checkpoints are written.
 
 ## Output
 
-Each run writes `gcmc_run.log` (banner, framed settings, sectioned narrative,
-per-species status lines with ✔/━ convergence marks) and closes with a
-PRESSURE CONTROL SUMMARY: the convergence verdict, the final vs requested
-pressure per species in the configured unit, and a description of the output
-files (`initial.lammpsdata` — the pressure-controlled restart for the next MD
-stage; `mc_cycle.extxyz` — the gas-box trajectory).
+Each run produces:
+
+- `gcmc_run.log`: a run log reporting the per-species convergence status and a final PRESSURE CONTROL SUMMARY, including the final and requested pressure for each species in the configured pressure unit.
+- `initial.lammpsdata`: the pressure-controlled structure to be used as the restart/input for the next MD stage.
+- `mc_cycle.extxyz`: the trajectory of the gas-box configuration over the GCMC cycle.
 
 ## Tests
 
