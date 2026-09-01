@@ -16,8 +16,8 @@ repository: [doi:10.5281/zenodo.21745812](https://zenodo.org/records/21745812).
 
 General features:
 
-- **Gas handling.** Any molecular formula can be used as a gas species (H₂, N₂, NH₃, CH₃OH, ...). Molecules are identified once at load time from their bond connectivity and elemental composition, then tracked using persistent molecule IDs. The slab can contain any combination of elements, including elements also present in the gas phase. Molecular masses are determined automatically from the gas templates.
-- **Mixtures with exact composition.** The mixture composition is specified by integer ratios, for example `ratios: {H2: 3, N2: 1}`, together with a total pressure. COMET determines the whole-molecule populations that most closely approximate the ideal-gas target PV/kBT, while preserving the specified molecular ratio exactly.
+- **Gas handling.** Any molecular formula can be used as a gas species (H₂, N₂, NH₃, CH₃OH, ...). Molecules are identified once at load time from their bond connectivity and elemental composition, then tracked using persistent molecule IDs. 
+- **Gas mixtures composition.** The mixture composition is specified by integer ratios, for example `ratios: {H2: 3, N2: 1}`, together with a total pressure. COMET maintains the specified ratio while choosing the molecule counts that give the closest possible ideal-gas target pressure.
 - **Molecule-aware partitioning.** The `z_cutoff` separates the buffer region from the pressure-control region used for GCMC insertion and deletion moves. Molecules are assigned by center-of-mass position, so they are never split across the boundary.
 - **Energy evaluation.** COMET supports MACE (`pip install comet[mace]`) and ORCA as energy-evaluation engines for the Metropolis acceptance criterion. MACE models are supplied via `model_dir`, with foundation models supported directly; ORCA requires the `orca` executable to be available on `PATH`.
 
@@ -78,8 +78,8 @@ seed: 42                        # reproducible runs (omit for independent runs)
 
 Each run produces:
 
-- `gcmc_run.log`: a run log reporting the per-species convergence status and a final PRESSURE CONTROL SUMMARY, including the final and requested pressure for each species in the configured pressure unit.
-- `initial.lammpsdata`: the pressure-controlled structure to be used as the restart/input for the next MD stage.
+- `gcmc_run.log`: a run log reporting the per-species convergence status and a final PRESSURE CONTROL SUMMARY, including the final and requested pressure for each species.
+- `initial.lammpsdata`: the pressure-controlled structure written in LAMMPS data format. In the hybrid GCMC/MD workflow presented in the paper, molecular dynamics is performed with the external LAMMPS (https://docs.lammps.org) engine, and this file serves as the input structure for the subsequent MD stage.
 - `mc_cycle.extxyz`: the trajectory of the gas-box configuration over the GCMC cycle.
 
 ## Tests
