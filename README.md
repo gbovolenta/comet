@@ -19,7 +19,8 @@ General features:
 - **Gas handling.** Any molecular formula can be used as a gas species (H₂, N₂, NH₃, CH₃OH, ...). Molecules are identified once at load time from their bond connectivity and elemental composition, then tracked using persistent molecule IDs. 
 - **Gas mixtures composition.** The mixture composition is specified by integer ratios, for example `ratios: {H2: 3, N2: 1}`, together with a total pressure. COMET maintains the specified ratio while choosing the molecule counts that give the closest possible ideal-gas target pressure.
 - **Molecule-aware partitioning.** The `z_cutoff` separates the buffer region from the pressure-control region used for GCMC insertion and deletion moves. Molecules are assigned by center-of-mass position, so they are never split across the boundary.
-- **Energy evaluation.** COMET supports MACE (`pip install comet[mace]`) and ORCA as energy-evaluation engines for the Metropolis acceptance criterion. MACE models are supplied via `model_dir`, with foundation models supported directly; ORCA requires the `orca` executable to be available on `PATH`.
+- **Energy evaluation.** COMET supports MACE (https://mace-docs.readthedocs.io/en/latest/) and ORCA (Neese, F. 2025, WIREs Computational Molecular Science,
+15, e70019, doi: 10.1002/wcms.70019) as energy-evaluation engines for the Metropolis acceptance criterion. MACE models are supplied via `model_dir`, with foundation models supported directly; ORCA requires the `orca` executable to be available on `PATH`.
 
 
 ## Installation
